@@ -29,8 +29,8 @@ Create a file named `arguments.js` and include the necessary details about the t
 
 ```javascript
 module.exports = [
-  "DubaiEP1", // _name
-  "DUBAIEP1", // _symbol
+  "TEST", // _name
+  "TST", // _symbol
   18,         // _decimals
   "1",        // _granularity. Note: If the token divisibility is "true" then it is 1, else it will be 10000000000000000000
   "-",        // _tokenDetails
