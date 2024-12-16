@@ -39,6 +39,8 @@ const VolumeRestrictionTMLogic = artifacts.require('./VolumeRestrictionTM.sol');
 const VolumeRestrictionLib = artifacts.require('./VolumeRestrictionLib.sol');
 const VestingEscrowWalletFactory = artifacts.require('./VestingEscrowWalletFactory.sol')
 const VestingEscrowWalletLogic = artifacts.require('./VestingEscrowWallet.sol');
+const Fractionalizer = artifacts.require('./Fractionalizer.sol');
+const SampleNFT = artifacts.require('./SampleNFT.sol');
 
 const Web3 = require("web3");
 let BN = Web3.utils.BN;
@@ -66,6 +68,16 @@ module.exports = function(deployer, network, accounts) {
             DevPolyToken.deployed().then(mockedUSDToken => {
                 UsdToken = mockedUSDToken.address;
             });
+        })
+        .then(() => {
+            return deployer.deploy(Fractionalizer, { from: PolymathAccount })
+        }).then(() => {
+            return Fractionalizer.deployed();
+        })
+        .then(() => {
+            return deployer.deploy(SampleNFT, { from: PolymathAccount })
+        }).then(() => {
+            return SampleNFT.deployed();
         });
         deployer
             .deploy(
@@ -113,7 +125,49 @@ module.exports = function(deployer, network, accounts) {
         POLYOracle = "0x461d98EF2A0c7Ac1416EF065840fF5d4C946206C"; // Poly Oracle Kovan Address
         ETHOracle = "0x14542627196c7dab26eb11ffd8a407ffc476de76"; // ETH Oracle Kovan Address
         StablePOLYOracle = ""; // TODO
-    } else if (network === "mainnet") {
+    } else if (network === "bscTestnet") {
+        web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-testnet-dataseed.bnbchain.org"));
+        PolymathAccount = accounts[0];
+        PolyToken = DevPolyToken.address; // Development network polytoken address
+        console.log(DevPolyToken);
+        deployer.deploy(DevPolyToken, { from: PolymathAccount }).then(() => {
+            DevPolyToken.deployed().then(mockedUSDToken => {
+                UsdToken = mockedUSDToken.address;
+            });
+        });
+        deployer
+            .deploy(MockOracle, PolyToken, web3.utils.fromAscii("POLY"), web3.utils.fromAscii("USD"), new BN(5).mul(new BN(10).pow(new BN(17))), { from: PolymathAccount }
+            ).then(() => {
+                return MockOracle.deployed();
+            }).then(mockedOracle => {
+                POLYOracle = mockedOracle.address;
+            }).then(() => {
+                return deployer.deploy(StableOracle, POLYOracle, new BN(10).mul(new BN(10).pow(new BN(16))), { from: PolymathAccount });
+            }).then(() => {
+                return StableOracle.deployed();
+            }).then(stableOracle => {
+                StablePOLYOracle = stableOracle.address;
+            })
+            .then(() => {
+                return deployer.deploy(Fractionalizer, { from: PolymathAccount })
+            }).then(() => {
+                return Fractionalizer.deployed();
+            })
+            .then(() => {
+                return deployer.deploy(SampleNFT, { from: PolymathAccount })
+            }).then(() => {
+                return SampleNFT.deployed();
+            });
+
+        deployer
+            .deploy(MockOracle, nullAddress, web3.utils.fromAscii("ETH"), web3.utils.fromAscii("USD"), new BN(500).mul(new BN(10).pow(new BN(18))), 
+                { from: PolymathAccount }
+            ).then(() => {
+                MockOracle.deployed().then(mockedOracle => {
+                    ETHOracle = mockedOracle.address;
+                });
+            })
+        } else if (network === "mainnet") {
         web3 = new Web3(new Web3.providers.HttpProvider("https://mainnet.infura.io/g5xfoQ0jFSE9S5LwM1Ei"));
         PolymathAccount = accounts[0];
         PolyToken = "0x9992eC3cF6A55b00978cdDF2b27BC6882d88D1eC"; // Mainnet PolyToken Address
@@ -620,6 +674,8 @@ module.exports = function(deployer, network, accounts) {
     VolumeRestrictionTMLogic:             ${VolumeRestrictionTMLogic.address}
     VestingEscrowWalletFactory:           ${VestingEscrowWalletFactory.address}
     VestingEscrowWalletLogic:             ${VestingEscrowWalletLogic.address}
+    Fractionalizer:                       ${Fractionalizer.address}
+    SampleNFT:                            ${SampleNFT.address}
     ---------------------------------------------------------------------------------
     `);
             console.log("\n");

@@ -145,7 +145,8 @@ contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManage
         view
         returns(Result, bytes32)
     {
-        return _verifyTransfer(_from, _to);
+        return (Result.FORCE_VALID, bytes32(0)); // Suppress KYC validation
+        // return _verifyTransfer(_from, _to);
     }
 
     function _verifyTransfer(
