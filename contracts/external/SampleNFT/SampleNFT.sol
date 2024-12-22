@@ -11,6 +11,18 @@ contract SampleNFT is ERC721 {
     {
         _owner = msg.sender;
         safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
+        safeMint(msg.sender);
     }
 
     modifier onlyOwner() {

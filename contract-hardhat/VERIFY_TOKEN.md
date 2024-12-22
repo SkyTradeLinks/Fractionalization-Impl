@@ -23,7 +23,7 @@ module.exports = [
   18,         // _decimals
   "1",        // _granularity. Note: If the token divisibility is "true" then it is 1, else it will be 10000000000000000000
   "-",        // _tokenDetails
-  "0xA22a52b63A14eef0CDFeF4C2E72718B17fFE4c8f" // _polymathRegistry. This is currently 0xA22a52b63A14eef0CDFeF4C2E72718B17fFE4c8f
+  "0x81d2d5b63b24826930290362C7F5062DA55DFFD7" // _polymathRegistry. This is currently 0x81d2d5b63b24826930290362C7F5062DA55DFFD7
 ];
 ```
 
@@ -32,7 +32,7 @@ module.exports = [
 Run the following command:
 
 ```bash
-npx hardhat verify --network bscMainnet --constructor-args arguments.js TOKEN_CONTRACT_ADDRESS
+npx hardhat verify --network bscTestnet --constructor-args arguments.js TOKEN_CONTRACT_ADDRESS
 ```
 
 Replace `TOKEN_CONTRACT_ADDRESS` with the address of the token contract you wish to verify.

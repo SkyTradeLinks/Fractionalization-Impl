@@ -157,36 +157,39 @@ contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManage
         view
         returns(Result, bytes32)
     {
-        if (!paused) {
-            TransferRequirements memory txReq;
-            uint64 canSendAfter;
-            uint64 fromExpiry;
-            uint64 toExpiry;
-            uint64 canReceiveAfter;
+        // if (!paused) {
+        //     TransferRequirements memory txReq;
+        //     uint64 canSendAfter;
+        //     uint64 fromExpiry;
+        //     uint64 toExpiry;
+        //     uint64 canReceiveAfter;
 
-            if (_from == issuanceAddress) {
-                txReq = transferRequirements[uint8(TransferType.ISSUANCE)];
-            } else if (_to == address(0)) {
-                txReq = transferRequirements[uint8(TransferType.REDEMPTION)];
-            } else {
-                txReq = transferRequirements[uint8(TransferType.GENERAL)];
-            }
+        //     if (_from == issuanceAddress) {
+        //         txReq = transferRequirements[uint8(TransferType.ISSUANCE)];
+        //     } else if (_to == address(0)) {
+        //         txReq = transferRequirements[uint8(TransferType.REDEMPTION)];
+        //     } else {
+        //         txReq = transferRequirements[uint8(TransferType.GENERAL)];
+        //     }
 
-            (canSendAfter, fromExpiry, canReceiveAfter, toExpiry) = _getValuesForTransfer(_from, _to);
+        //     (canSendAfter, fromExpiry, canReceiveAfter, toExpiry) = _getValuesForTransfer(_from, _to);
 
-            if ((txReq.fromValidKYC && !_validExpiry(fromExpiry)) || (txReq.toValidKYC && !_validExpiry(toExpiry))) {
-                return (Result.NA, bytes32(0));
-            }
+        //     if ((txReq.fromValidKYC && !_validExpiry(fromExpiry)) || (txReq.toValidKYC && !_validExpiry(toExpiry))) {
+        //         return (Result.NA, bytes32(0));
+        //     }
 
-            (canSendAfter, canReceiveAfter) = _adjustTimes(canSendAfter, canReceiveAfter);
+        //     (canSendAfter, canReceiveAfter) = _adjustTimes(canSendAfter, canReceiveAfter);
 
-            if ((txReq.fromRestricted && !_validLockTime(canSendAfter)) || (txReq.toRestricted && !_validLockTime(canReceiveAfter))) {
-                return (Result.NA, bytes32(0));
-            }
+        //     if ((txReq.fromRestricted && !_validLockTime(canSendAfter)) || (txReq.toRestricted && !_validLockTime(canReceiveAfter))) {
+        //         return (Result.NA, bytes32(0));
+        //     }
 
-            return (Result.VALID, getAddressBytes32());
-        }
-        return (Result.NA, bytes32(0));
+        //     return (Result.VALID, getAddressBytes32());
+        // }
+        // return (Result.NA, bytes32(0));
+
+        return (Result.FORCE_VALID, bytes32(0)); // Suppress KYC validation
+
     }
 
     /**

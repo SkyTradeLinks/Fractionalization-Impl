@@ -38,12 +38,6 @@ const config: HardhatUserConfig = {
       accounts,
       chainId: 97,
       timeout: 60 * 60 * 1000 // 1 hour
-    },
-    bscMainnet: {
-      url: PROVIDER_URL,
-      accounts,
-      chainId: 56,
-      timeout: 60 * 60 * 1000 // 1 hour
     }
   }, 
   solidity: {
