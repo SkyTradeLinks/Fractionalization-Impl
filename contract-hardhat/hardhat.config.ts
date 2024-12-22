@@ -3,10 +3,6 @@ import dotenv from 'dotenv';
 import "@nomicfoundation/hardhat-toolbox";
 
 const dotenvResult = dotenv.config();
-
-// import * as tdly from "@tenderly/hardhat-tenderly";
-// tdly.setup();
-
 if (dotenvResult.error) {
   throw dotenvResult.error;
 }
@@ -55,7 +51,10 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY
-  }
+  },
+  paths: {
+    sources: "../contracts",
+  },
 };
 
 export default config;
