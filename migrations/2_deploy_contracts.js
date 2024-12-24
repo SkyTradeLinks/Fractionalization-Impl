@@ -12,6 +12,8 @@ const EtherDividendCheckpointLogic = artifacts.require("./EtherDividendCheckpoin
 const ERC20DividendCheckpointLogic = artifacts.require("./ERC20DividendCheckpoint.sol");
 const EtherDividendCheckpointFactory = artifacts.require("./EtherDividendCheckpointFactory.sol");
 const ERC20DividendCheckpointFactory = artifacts.require("./ERC20DividendCheckpointFactory.sol");
+const GeneralFractionalizerFactory = artifacts.require("./GeneralFractionalizerFactory.sol");
+const GeneralFractionalizerLogic = artifacts.require("./GeneralFractionalizer.sol");
 const ModuleRegistry = artifacts.require("./ModuleRegistry.sol");
 const ModuleRegistryProxy = artifacts.require("./ModuleRegistryProxy.sol");
 const ManualApprovalTransferManagerFactory = artifacts.require("./ManualApprovalTransferManagerFactory.sol");
@@ -39,6 +41,7 @@ const VolumeRestrictionTMLogic = artifacts.require('./VolumeRestrictionTM.sol');
 const VolumeRestrictionLib = artifacts.require('./VolumeRestrictionLib.sol');
 const VestingEscrowWalletFactory = artifacts.require('./VestingEscrowWalletFactory.sol')
 const VestingEscrowWalletLogic = artifacts.require('./VestingEscrowWallet.sol');
+const SampleNFT = artifacts.require('./SampleNFT.sol');
 
 const Web3 = require("web3");
 let BN = Web3.utils.BN;
@@ -66,6 +69,11 @@ module.exports = function(deployer, network, accounts) {
             DevPolyToken.deployed().then(mockedUSDToken => {
                 UsdToken = mockedUSDToken.address;
             });
+        })
+        .then(() => {
+            return deployer.deploy(SampleNFT, { from: PolymathAccount })
+        }).then(() => {
+            return SampleNFT.deployed();
         });
         deployer
             .deploy(
@@ -113,7 +121,44 @@ module.exports = function(deployer, network, accounts) {
         POLYOracle = "0x461d98EF2A0c7Ac1416EF065840fF5d4C946206C"; // Poly Oracle Kovan Address
         ETHOracle = "0x14542627196c7dab26eb11ffd8a407ffc476de76"; // ETH Oracle Kovan Address
         StablePOLYOracle = ""; // TODO
-    } else if (network === "mainnet") {
+    } else if (network === "bscTestnet") {
+        web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-testnet-dataseed.bnbchain.org"));
+        PolymathAccount = accounts[0];
+        PolyToken = DevPolyToken.address; // Development network polytoken address
+        console.log(DevPolyToken);
+        deployer.deploy(DevPolyToken, { from: PolymathAccount }).then(() => {
+            DevPolyToken.deployed().then(mockedUSDToken => {
+                UsdToken = mockedUSDToken.address;
+            });
+        });
+        deployer
+            .deploy(MockOracle, PolyToken, web3.utils.fromAscii("POLY"), web3.utils.fromAscii("USD"), new BN(5).mul(new BN(10).pow(new BN(17))), { from: PolymathAccount }
+            ).then(() => {
+                return MockOracle.deployed();
+            }).then(mockedOracle => {
+                POLYOracle = mockedOracle.address;
+            }).then(() => {
+                return deployer.deploy(StableOracle, POLYOracle, new BN(10).mul(new BN(10).pow(new BN(16))), { from: PolymathAccount });
+            }).then(() => {
+                return StableOracle.deployed();
+            }).then(stableOracle => {
+                StablePOLYOracle = stableOracle.address;
+            })
+            .then(() => {
+                return deployer.deploy(SampleNFT, { from: PolymathAccount })
+            }).then(() => {
+                return SampleNFT.deployed();
+            });
+
+        deployer
+            .deploy(MockOracle, nullAddress, web3.utils.fromAscii("ETH"), web3.utils.fromAscii("USD"), new BN(500).mul(new BN(10).pow(new BN(18))), 
+                { from: PolymathAccount }
+            ).then(() => {
+                MockOracle.deployed().then(mockedOracle => {
+                    ETHOracle = mockedOracle.address;
+                });
+            })
+        } else if (network === "mainnet") {
         web3 = new Web3(new Web3.providers.HttpProvider("https://mainnet.infura.io/g5xfoQ0jFSE9S5LwM1Ei"));
         PolymathAccount = accounts[0];
         PolyToken = "0x9992eC3cF6A55b00978cdDF2b27BC6882d88D1eC"; // Mainnet PolyToken Address
@@ -307,6 +352,11 @@ module.exports = function(deployer, network, accounts) {
             return deployer.deploy(VestingEscrowWalletLogic, nullAddress, nullAddress, { from: PolymathAccount });
         })
         .then(() => {
+            // B) Deploy the GeneralFractionalizerLogic Contract (Factory used to generate the GeneralFractionalizer contract and this
+            // manager attach with the securityToken contract at the time of deployment)
+            return deployer.deploy(GeneralFractionalizerLogic, nullAddress, nullAddress, { from: PolymathAccount });
+        })
+        .then(() => {
             // B) Deploy the DataStoreLogic Contract
             return deployer.deploy(DataStoreLogic, { from: PolymathAccount });
         })
@@ -376,6 +426,13 @@ module.exports = function(deployer, network, accounts) {
             // D) Deploy the VestingEscrowWalletFactory Contract (Factory used to generate the ManualApprovalTransferManager contract use
             // to manual approve the transfer that will overcome the other transfer restrictions)
             return deployer.deploy(VestingEscrowWalletFactory, new BN(0), VestingEscrowWalletLogic.address, polymathRegistry.address, {
+                from: PolymathAccount
+            });
+        })
+        .then(() => {
+            // D) Deploy the GeneralFractionalizerFactory Contract (Factory used to generate the GeneralFractionalizer contract use
+            // to provide the functionality of the fractionalization of ERC721 token)
+            return deployer.deploy(GeneralFractionalizerFactory, new BN(0), GeneralFractionalizerLogic.address, polymathRegistry.address, {
                 from: PolymathAccount
             });
         })
@@ -487,6 +544,11 @@ module.exports = function(deployer, network, accounts) {
             return moduleRegistry.registerModule(VestingEscrowWalletFactory.address, { from: PolymathAccount });
         })
         .then(() => {
+            // E) Register the GeneralFractionalizerFactory in the ModuleRegistry to make the factory available at the protocol level.
+            // So any securityToken can use that factory to generate the GeneralFractionalizer contract.
+            return moduleRegistry.registerModule(GeneralFractionalizerFactory.address, { from: PolymathAccount });
+        })
+        .then(() => {
             // F) Once the GeneralTransferManagerFactory registered with the ModuleRegistry contract then for making them accessble to the securityToken
             // contract, Factory should comes under the verified list of factories or those factories deployed by the securityToken issuers only.
             // Here it gets verified because it is deployed by the third party account (Polymath Account) not with the issuer accounts.
@@ -539,6 +601,12 @@ module.exports = function(deployer, network, accounts) {
             // contract, Factory should comes under the verified list of factories or those factories deployed by the securityToken issuers only.
             // Here it gets verified because it is deployed by the third party account (Polymath Account) not with the issuer accounts.
             return moduleRegistry.verifyModule(VestingEscrowWalletFactory.address, { from: PolymathAccount });
+        })
+        .then(() => {
+            // G) Once the GeneralFractionalizerFactory registered with the ModuleRegistry contract then for making them accessble to the securityToken
+            // contract, Factory should comes under the verified list of factories or those factories deployed by the securityToken issuers only.
+            // Here it gets verified because it is deployed by the third party account (Polymath Account) not with the issuer accounts.
+            return moduleRegistry.verifyModule(GeneralFractionalizerFactory.address, { from: PolymathAccount });
         })
         .then(() => {
             // M) Deploy the CappedSTOFactory (Use to generate the CappedSTO contract which will used to collect the funds ).
@@ -620,6 +688,9 @@ module.exports = function(deployer, network, accounts) {
     VolumeRestrictionTMLogic:             ${VolumeRestrictionTMLogic.address}
     VestingEscrowWalletFactory:           ${VestingEscrowWalletFactory.address}
     VestingEscrowWalletLogic:             ${VestingEscrowWalletLogic.address}
+    GeneralFractionalizerFactory:         ${GeneralFractionalizerFactory.address}
+    GeneralFractionalizerLogic:           ${GeneralFractionalizerLogic.address}
+    SampleNFT:                            ${SampleNFT.address}
     ---------------------------------------------------------------------------------
     `);
             console.log("\n");
