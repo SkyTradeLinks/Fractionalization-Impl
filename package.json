@@ -27,6 +27,7 @@
     "migrate:ropsten": "truffle migrate --network=ropsten --reset --all",
     "migrate:kovan": "truffle migrate --network=kovan --reset --all",
     "migrate:mainnet": "truffle migrate --network=mainnet",
+    "migrate:monadTestnet": "truffle migrate --network monadTestnet",
     "coverage": "scripts/coverage.sh",
     "flatten-modules": "sol-merger './contracts/modules/*/*.sol' ./flat/modules",
     "flatten-token": "sol-merger './contracts/tokens/*.sol' ./flat/tokens",

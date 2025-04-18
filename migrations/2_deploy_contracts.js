@@ -42,13 +42,14 @@ const VolumeRestrictionLib = artifacts.require('./VolumeRestrictionLib.sol');
 const VestingEscrowWalletFactory = artifacts.require('./VestingEscrowWalletFactory.sol')
 const VestingEscrowWalletLogic = artifacts.require('./VestingEscrowWallet.sol');
 const SampleNFT = artifacts.require('./SampleNFT.sol');
+const TradingRestrictionManager = artifacts.require('./TradingRestrictionManager.sol');
 
 const Web3 = require("web3");
 let BN = Web3.utils.BN;
 const nullAddress = "0x0000000000000000000000000000000000000000";
-const cappedSTOSetupCost = new BN(20000).mul(new BN(10).pow(new BN(18))); // 20K POLY fee
-const usdTieredSTOSetupCost = new BN(100000).mul(new BN(10).pow(new BN(18))); // 100K POLY fee
-const initRegFee = new BN(250).mul(new BN(10).pow(new BN(18))); // 250 POLY fee for registering ticker or security token in registry
+const cappedSTOSetupCost = 0; // 0 POLY fee
+const usdTieredSTOSetupCost = 0; // 0 POLY fee
+const initRegFee = 0; // 0 POLY fee for registering ticker or security token in registry
 let PolyToken;
 let UsdToken;
 let ETHOracle;
@@ -74,6 +75,11 @@ module.exports = function(deployer, network, accounts) {
             return deployer.deploy(SampleNFT, { from: PolymathAccount })
         }).then(() => {
             return SampleNFT.deployed();
+        })
+        .then(() => {
+            return deployer.deploy(TradingRestrictionManager, { from: PolymathAccount })
+        }).then(() => {
+            return TradingRestrictionManager.deployed();
         });
         deployer
             .deploy(
@@ -121,8 +127,8 @@ module.exports = function(deployer, network, accounts) {
         POLYOracle = "0x461d98EF2A0c7Ac1416EF065840fF5d4C946206C"; // Poly Oracle Kovan Address
         ETHOracle = "0x14542627196c7dab26eb11ffd8a407ffc476de76"; // ETH Oracle Kovan Address
         StablePOLYOracle = ""; // TODO
-    } else if (network === "bscTestnet") {
-        web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-testnet-dataseed.bnbchain.org"));
+    } else if (network === "monadTestnet") {
+        web3 = new Web3(new Web3.providers.HttpProvider("https://testnet-rpc.monad.xyz"));
         PolymathAccount = accounts[0];
         PolyToken = DevPolyToken.address; // Development network polytoken address
         console.log(DevPolyToken);
@@ -148,6 +154,11 @@ module.exports = function(deployer, network, accounts) {
                 return deployer.deploy(SampleNFT, { from: PolymathAccount })
             }).then(() => {
                 return SampleNFT.deployed();
+            })
+            .then(() => {
+                return deployer.deploy(TradingRestrictionManager, { from: PolymathAccount })
+            }).then(() => {
+                return TradingRestrictionManager.deployed();
             });
 
         deployer
@@ -691,6 +702,7 @@ module.exports = function(deployer, network, accounts) {
     GeneralFractionalizerFactory:         ${GeneralFractionalizerFactory.address}
     GeneralFractionalizerLogic:           ${GeneralFractionalizerLogic.address}
     SampleNFT:                            ${SampleNFT.address}
+    TradingRestrictionManager:            ${TradingRestrictionManager.address}
     ---------------------------------------------------------------------------------
     `);
             console.log("\n");

@@ -6,7 +6,7 @@ import "../../../libraries/VersionUtils.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "./GeneralTransferManagerStorage.sol";
-import "../../../external/ITradingRestrictionManager.sol";
+import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.sol";
 
 /**
  * @title Transfer Manager module for core transfer validation functionality

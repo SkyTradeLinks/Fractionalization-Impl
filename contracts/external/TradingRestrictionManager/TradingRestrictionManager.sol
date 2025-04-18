@@ -1,41 +1,51 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.5.8;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "./ITradingRestrictionManager.sol";
 
-library TimestampUtils {
-    function future(uint64 daysAhead) internal view returns (uint64) {
-        return uint64(block.timestamp + (daysAhead * 1 days));
+/**
+ * @dev Replaces OpenZeppelin's Ownable for Solidity 0.5.8
+ */
+contract Ownable {
+    address public owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    constructor () public {
+        owner = msg.sender;
     }
 
-    function past(uint64 daysAgo) internal view returns (uint64) {
-        return uint64(block.timestamp - (daysAgo * 1 days));
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Ownable: caller is not the owner");
+        _;
+    }
+
+    function transferOwnership(address newOwner) public onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 }
 
 contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
-    using TimestampUtils for uint64;
-
-    // Operator roles
     mapping(address => bool) public isOperator;
-
-    // Investor KYC data
     mapping(address => InvestorKYCData) private _kycData;
     mapping(address => bool) private _existingInvestors;
 
-    // Token-specific restrictions
     mapping(address => uint64) public nonUSTradingRestrictionPeriod;
     mapping(address => uint64) public usTradingRestrictionPeriod;
     mapping(address => uint64) public tokenLockStartTime;
     mapping(address => bool) public whitelistOnlyTrading;
+
+    event OperatorRoleGranted(address indexed operator);
+    event OperatorRoleRevoked(address indexed operator);
+    event TradingRestrictionSet(address indexed token, uint64 nonUS, uint64 us, uint64 lockStart);
 
     modifier onlyOperator() {
         require(isOperator[msg.sender], "Operator only");
         _;
     }
 
-    // Operator Management
     function grantOperator(address account) external onlyOwner {
         require(!isOperator[account], "Already operator");
         isOperator[account] = true;
@@ -48,45 +58,42 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
         emit OperatorRoleRevoked(account);
     }
 
-    // Investor KYC Management
     function modifyKYCData(
         address investor,
         uint64 expiryTime,
-        bool, // isAccredited unused but preserved for interface compatibility
+        bool, // isAccredited unused
         InvestorClass investorClass
-    ) external override onlyOperator {
+    ) external onlyOperator {
         _existingInvestors[investor] = true;
         _kycData[investor] = InvestorKYCData(expiryTime, investorClass);
-        emit InvestorKYCDataUpdate(investor, expiryTime, investorClass);
+        emit InvestorKYCDataUpdated(investor, expiryTime, investorClass);
     }
 
     function isExistingInvestor(address investor) external view returns (bool) {
         return _existingInvestors[investor];
     }
 
-    // Token Settings
     function setTradingRestrictionPeriod(
         address token,
         uint64 nonUSPeriod,
         uint64 usPeriod,
         uint64 lockStart
-    ) external override onlyOwner {
+    ) external onlyOwner {
         nonUSTradingRestrictionPeriod[token] = nonUSPeriod;
         usTradingRestrictionPeriod[token] = usPeriod;
         tokenLockStartTime[token] = lockStart;
         emit TradingRestrictionSet(token, nonUSPeriod, usPeriod, lockStart);
     }
 
-    function setWhitelistOnlyTrading(address token, bool status) external override onlyOwner {
+    function setWhitelistOnlyTrading(address token, bool status) external onlyOwner {
         whitelistOnlyTrading[token] = status;
         emit WhitelistOnlyTradingUpdated(token, status);
     }
 
-    // KYC Data Query / Trade Permission Check
     function getInvestorKYCData(
         address investor,
         address token
-    ) public view override returns (
+    ) public view returns (
         uint64 canSendAfter,
         uint64 canReceiveAfter,
         uint64 expiryTime,
@@ -95,7 +102,6 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
         bool exists = _existingInvestors[investor];
         bool enforceWhitelist = whitelistOnlyTrading[token];
 
-        // If whitelist enforced and investor is unknown, block trade
         if (!exists && enforceWhitelist) {
             return (_future(), _future(), _past(), 0);
         }
@@ -104,32 +110,29 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
         uint64 startTime = tokenLockStartTime[token];
 
         if (startTime == 0) {
-            // Token issuance not started
             return (_future(), _future(), kyc.expiryTime, 1);
         }
 
-        // Determine unlock time based on investor class
         uint64 restrictionPeriod = kyc.investorClass == InvestorClass.US
             ? usTradingRestrictionPeriod[token]
             : nonUSTradingRestrictionPeriod[token];
 
         uint64 unlockTime = startTime + restrictionPeriod;
-        uint64 sendAfter = block.timestamp >= unlockTime ? _past() : unlockTime;
+        uint64 sendAfter = now >= unlockTime ? _past() : unlockTime;
 
         return (
             sendAfter,
-            _past(), // Receiving is unrestricted unless customized
+            _past(),
             kyc.expiryTime,
             1
         );
     }
 
-    // Internal time helpers
     function _future() internal view returns (uint64) {
-        return TimestampUtils.future(1); // 1 day ahead
+        return uint64(now + (1 days));
     }
 
     function _past() internal view returns (uint64) {
-        return TimestampUtils.past(1); // 1 day ago
+        return uint64(now - (1 days));
     }
 }

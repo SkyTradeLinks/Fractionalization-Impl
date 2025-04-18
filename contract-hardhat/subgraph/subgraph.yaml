@@ -1,0 +1,164 @@
+specVersion: 0.0.4
+description: Estate Protocol contract indexer
+repository: https://github.com/Estate-Protocol-Home/contracts
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: USDTieredSTOFactory
+    network: arbitrum-one
+    source:
+      address: '0xf65ca388AE87040E7f3883C6eB4995A7EdcBe395'
+      abi: USDTieredSTOFactory
+      startBlock: 172074671
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./mappings/factory.ts
+      entities:
+        - USDTieredSTOFactory
+      abis:
+        - name: USDTieredSTOFactory
+          file: ../../build/contracts/USDTieredSTOFactory.json
+      eventHandlers:
+        - event: GenerateModuleFromFactory(address,indexed bytes32,indexed address,address,uint256,uint256)
+          handler: handleGenerateModuleFromUSDTieredSTOFactory
+
+  - kind: ethereum/contract
+    name: ERC20DividendCheckpointFactory
+    network: arbitrum-one
+    source:
+      address: '0xc2423aAa4f9f342456BE4718a17A0DC973F39eEE'
+      abi: ERC20DividendCheckpointFactory
+      startBlock: 172074671
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./mappings/factory.ts
+      entities:
+        - ERC20DividendCheckpointFactory
+      abis:
+        - name: ERC20DividendCheckpointFactory
+          file: ../../build/contracts/ERC20DividendCheckpointFactory.json
+      eventHandlers:
+        - event: GenerateModuleFromFactory(address,indexed bytes32,indexed address,address,uint256,uint256)
+          handler: handleGenerateModuleFromERC20DividendCheckpointFactory
+
+  - kind: ethereum/contract
+    name: GeneralTransferManagerFactory
+    network: arbitrum-one
+    source:
+      address: '0xceB06a6E59D76D3722e1AF30f2d6c290831AecF5'
+      abi: GeneralTransferManagerFactory
+      startBlock: 172074671
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./mappings/factory.ts
+      entities:
+        - GeneralTransferManagerFactory
+      abis:
+        - name: GeneralTransferManagerFactory
+          file: ../../build/contracts/GeneralTransferManagerFactory.json
+      eventHandlers:
+        - event: GenerateModuleFromFactory(address,indexed bytes32,indexed address,address,uint256,uint256)
+          handler: handleGenerateModuleFromGeneralTransferManagerFactory
+          
+  - kind: ethereum/contract
+    name: SecurityTokenRegistry
+    network: arbitrum-one
+    source:
+      address: '0x096C0F11E046Cd1dAAB53F2612512cd5cb84F325'
+      abi: SecurityTokenRegistry
+      startBlock: 172074671
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./mappings/securityToken.ts
+      entities:
+        - SecurityToken
+      abis:
+        - name: SecurityTokenRegistry
+          file: ../../build/contracts/SecurityTokenRegistry.json
+      eventHandlers:
+        - event: NewSecurityToken(string,string,indexed address,indexed address,uint256,address,bool,uint256,uint256,uint256)
+          handler: handleNewSecurityTokenCreation
+
+
+templates:
+  - name: USDTieredSTO
+    kind: ethereum/contract
+    network: arbitrum-one
+    source:
+      abi: USDTieredSTO
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./mappings/usdTieredSTO.ts
+      entities:
+        - USDTieredSTO
+      abis:
+        - name: USDTieredSTO
+          file: ../../build/contracts/USDTieredSTO.json
+      eventHandlers:
+        - event: TokenPurchase(indexed address,indexed address,uint256,uint256,uint256,uint256)
+          handler: handleTokenPurchase
+
+  - name: ERC20DividendCheckpoint
+    kind: ethereum/contract
+    network: arbitrum-one
+    source:
+      abi: ERC20DividendCheckpoint
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./mappings/erc20DividendCheckpoint.ts
+      entities:
+        - ERC20DividendClaimed
+        - ERC20DividendDeposited
+        - UserDividend
+      abis:
+        - name: ERC20DividendCheckpoint
+          file: ../../build/contracts/ERC20DividendCheckpoint.json
+      eventHandlers:
+        - event: ERC20DividendDeposited(indexed address,uint256,uint256,uint256,indexed address,uint256,uint256,uint256,indexed bytes32)
+          handler: handleDividendCreation
+        - event: ERC20DividendClaimed(indexed address,indexed uint256,indexed address,uint256,uint256)
+          handler: handleDividendClaim
+
+  - name: SecurityToken
+    kind: ethereum/contract
+    network: arbitrum-one
+    source:
+      abi: SecurityToken
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./mappings/securityToken.ts
+      entities:
+        - Transfer
+        - Account
+        - Aggregate
+        - CheckpointBalance
+        - AccountUser
+      abis:
+        - name: SecurityToken
+          file: ../../build/contracts/SecurityToken.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+        - event: CheckpointCreated(indexed uint256,uint256)
+          handler: handleCreateCheckpoint
+
+
+
+
+
+

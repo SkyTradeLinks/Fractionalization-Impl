@@ -1,28 +1,15 @@
 pragma solidity 0.5.8;
 
-import "openzeppelin-solidity/contracts/token/ERC721/ERC721.sol";
+import "openzeppelin-solidity/contracts/token/ERC721/ERC721Metadata.sol";
 
-contract SampleNFT is ERC721 {
+contract SampleNFT is ERC721Metadata {
     uint256 private _nextTokenId;
     address private _owner;
 
     constructor () public
-        ERC721()
+        ERC721Metadata("SkyTrade Token", "SKYT")
     {
         _owner = msg.sender;
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
-        safeMint(msg.sender);
     }
 
     modifier onlyOwner() {
@@ -34,8 +21,9 @@ contract SampleNFT is ERC721 {
         return msg.sender == _owner;
     }
 
-    function safeMint(address to) public onlyOwner {
+    function safeMint(address to, string memory metadataURI) public {
         uint256 tokenId = _nextTokenId++;
         _mint(to, tokenId);
+        _setTokenURI(tokenId, metadataURI);
     }
 }
