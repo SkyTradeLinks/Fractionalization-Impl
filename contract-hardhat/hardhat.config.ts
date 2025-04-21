@@ -38,6 +38,11 @@ const config: HardhatUserConfig = {
       accounts,
       chainId: 97,
       timeout: 60 * 60 * 1000 // 1 hour
+    },
+    plume: {
+      url: "https://phoenix-rpc.plumenetwork.xyz",
+      chainId: 98866,
+      accounts,
     }
   }, 
   solidity: {
@@ -49,8 +54,23 @@ const config: HardhatUserConfig = {
       },
     },
   },
+  // etherscan: {
+  //   apiKey: ETHERSCAN_API_KEY
+  // },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY
+    apiKey: {
+      "plume": "test"
+    },
+    customChains: [
+      {
+        network: "plume",
+        chainId: 98866,
+        urls: {
+          apiURL: "https://phoenix-explorer.plumenetwork.xyz/api\?",
+          browserURL: "https://phoenix-explorer.plumenetwork.xyz"
+        }
+      }
+    ]
   }
 };
 

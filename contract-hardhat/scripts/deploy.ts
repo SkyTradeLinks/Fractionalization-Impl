@@ -45,6 +45,18 @@ async function main() {
 
   console.log({PolyTokenFaucetContractAddress})
 
+  const TradingRestrictionManager = await ethers.deployContract("TradingRestrictionManager", deployer);
+  await TradingRestrictionManager.waitForDeployment();
+  const TradingRestrictionManagerContractAddress = await TradingRestrictionManager.getAddress();
+
+  console.log({ TradingRestrictionManagerContractAddress })
+
+  const SampleNFT = await ethers.deployContract("SampleNFT", deployer);
+  await SampleNFT.waitForDeployment();
+  const SampleNFTContractAddress = await SampleNFT.getAddress();
+
+  console.log({ SampleNFTContractAddress })
+
   const paddedPOLY = ethers.zeroPadValue(web3.utils.fromAscii("POLY"), 32)
   const paddedUSD = ethers.zeroPadValue(web3.utils.fromAscii("USD"), 32)
   const paddedETH = ethers.zeroPadValue(web3.utils.fromAscii("ETH"), 32)
@@ -290,12 +302,6 @@ async function main() {
   await STRGetter.waitForDeployment();
   const STRGetterContractAddress = await STRGetter.getAddress();
   console.log({STRGetterContractAddress})
-  
-
-  const SampleNFT = await ethers.deployContract("SampleNFT", deployer);
-  await SampleNFT.waitForDeployment();
-  const SampleNFTContractAddress = await SampleNFT.getAddress();
-  console.log({ SampleNFTContractAddress })
 
 
   const initRegFee = 0;
