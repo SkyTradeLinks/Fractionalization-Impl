@@ -39,6 +39,12 @@ const config: HardhatUserConfig = {
       chainId: 97,
       timeout: 60 * 60 * 1000 // 1 hour
     },
+    baseSepoliaTestnet: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 84532,
+      timeout: 60 * 60 * 1000 // 1 hour
+    },
     plume: {
       url: "https://phoenix-rpc.plumenetwork.xyz",
       chainId: 98866,

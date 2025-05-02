@@ -92,6 +92,9 @@ type UserDividend @entity {
   id: ID!
   user: Account!
   claim: BigInt! 
+  creationUnixTimestamp: BigInt! 
+  totalClaimableAmount: BigInt!
+  transactionHash: Bytes! 
   withheld: BigInt!
   token: SecurityToken!
 }

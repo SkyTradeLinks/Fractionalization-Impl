@@ -72,6 +72,9 @@ export function handleDividendCreation(event: ERC20DividendDepositedEvent): void
       userDividend = new UserDividend(userDividendId);
     }
 
+    userDividend.creationUnixTimestamp = event.block.timestamp;
+    userDividend.transactionHash = event.transaction.hash;
+    userDividend.totalClaimableAmount = dividend.getValue0();
     userDividend.claim = dividend.getValue0();
     userDividend.withheld = dividend.getValue1();
     userDividend.token = token;

@@ -11,7 +11,6 @@ import {
   ERC20DividendCheckpoint as ERC20DividendCheckpointTemplate, 
   USDTieredSTO as USDTieredSTOTemplate 
 } from "../../generated/templates"
-import { LogicContractSet as LogicContractSetEvent } from '../../generated/STFactory/STFactory';
 import { SecurityToken as SecurityTokenTemplate } from '../../generated/templates';
 import {
   GenerateModuleFromFactory as GenerateModuleFromFactoryEvent
@@ -101,27 +100,5 @@ export function handleGenerateModuleFromERC20DividendCheckpointFactory(
   entity.save()
 }
 
-export function handleSetSecurityTokenLogic(event: LogicContractSetEvent): void {
-
-  const id = event.transaction.hash.toHex();
-
-  let entity = SecurityTokenFactorySchema.load(id)
-
-  if (!entity) {
-    entity = new SecurityTokenFactorySchema(id)
-  }
-
-  entity.version = event.params._version
-  entity.upgrade = event.params._upgrade
-  entity.logicContract = event.params._logicContract
-  entity.initializationData = event.params._initializationData
-  entity.upgradeData = event.params._upgradeData
-
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
-
-  entity.save()
-}
 
 
