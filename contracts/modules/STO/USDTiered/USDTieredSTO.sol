@@ -6,6 +6,8 @@ import "../../../interfaces/IOracle.sol";
 import "../../../libraries/DecimalMath.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "./USDTieredSTOStorage.sol";
+import "../../../external/IKYCWhitelistMerkleSTO.sol";
+
 
 /**
  * @title STO module for standard capped crowdsale
@@ -15,6 +17,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
 
     string internal constant POLY_ORACLE = "PolyUsdOracle";
     string internal constant ETH_ORACLE = "EthUsdOracle";
+    IKYCWhitelistMerkleSTO public whitelistAddress;
 
     ////////////
     // Events //
@@ -50,6 +53,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
         uint256[] _tokensPerTierDiscountPoly
     );
     event SetTreasuryWallet(address _oldWallet, address _newWallet);
+    event WhitelistAddressUpdated(address indexed whitelistAddress);
 
     ///////////////
     // Modifiers //
@@ -357,7 +361,18 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
         return buyWithPOLYRateLimited(_beneficiary, _investedPOLY, 0);
     }
 
-    function buyWithUSD(address _beneficiary, uint256 _investedSC, IERC20 _usdToken) external returns (uint256, uint256, uint256) {
+    function buyWithUSD(address _beneficiary, uint256 _investedSC, IERC20 _usdToken, bytes32[] calldata proof, uint64 expiry, bool isAccredited) external returns (uint256, uint256, uint256) {
+
+         require(
+            IKYCWhitelistMerkleSTO(whitelistAddress).verifyInvestor(
+            proof,
+            _beneficiary,
+            expiry,
+            isAccredited
+        ),
+        "Investor verification failed"
+      );
+
         return buyWithUSDRateLimited(_beneficiary, _investedSC, 0, _usdToken);
     }
 
@@ -586,6 +601,16 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
     /////////////
     // Getters //
     /////////////
+
+    /**
+    * @notice Sets the whitelist contract address
+    * @param _whitelistAddress Address of the KYCWhitelistMerkleSTO contract
+    */
+    function setWhitelistAddress(address _whitelistAddress) external withPerm(ADMIN) {
+        require(_whitelistAddress != address(0), "Invalid whitelist address");
+        whitelistAddress = IKYCWhitelistMerkleSTO(_whitelistAddress);
+        emit WhitelistAddressUpdated(_whitelistAddress);
+    }
 
     /**
      * @notice This function returns whether or not the STO is in fundraising mode (open)
