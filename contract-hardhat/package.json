@@ -13,6 +13,7 @@
     "contracts:deploy:local": "hardhat run ./scripts/deploy.ts  --network local",
     "contracts:deploy:hardhat": "hardhat run ./scripts/deploy.ts  --network hardhat",
     "contracts:deploy:baseSepoliaTestnet": "hardhat run ./scripts/deploy.ts  --network baseSepoliaTestnet",
+    "contracts:deploy:baseMainnet": "hardhat run ./scripts/deploy.ts  --network baseMainnet",
     "contracts:deploy:plume": "hardhat run ./scripts/deploy.ts  --network plume",
     "contracts:deploy:arbitrumMainnet": "hardhat run ./scripts/deploy.ts  --network arbitrumMainnet",
     "contracts:deploy:arbitrumSepolia": "hardhat run ./scripts/deploy.ts  --network arbitrumSepolia",

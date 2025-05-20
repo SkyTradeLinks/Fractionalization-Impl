@@ -148,16 +148,32 @@ export function handleDividendClaim(event: ERC20DividendClaimedEvent): void {
 
     let userDividend = UserDividend.load(userDividendId);
 
-    if (!userDividend) {
+    if (userDividend) {
+      userDividend.creationUnixTimestamp = event.block.timestamp;
+      userDividend.transactionHash = event.transaction.hash;
+
+      // Intentional skip userDividend.totalClaimableAmount = dividend.getValue0();
+      userDividend.claim = dividend.getValue0();
+      userDividend.withheld = dividend.getValue1();
+      userDividend.token = token;
+      userDividend.user = user;
+
+      userDividend.save();
+    } else {
       userDividend = new UserDividend(userDividendId);
+      
+
+      userDividend.creationUnixTimestamp = event.block.timestamp;
+      userDividend.transactionHash = event.transaction.hash;
+      userDividend.totalClaimableAmount = dividend.getValue0();
+
+      userDividend.claim = dividend.getValue0();
+      userDividend.withheld = dividend.getValue1();
+      userDividend.token = token;
+      userDividend.user = user;
+
+      userDividend.save();
     }
-
-    userDividend.claim = dividend.getValue0();
-    userDividend.withheld = dividend.getValue1();
-    userDividend.token = token;
-    userDividend.user = user;
-
-    userDividend.save();
 
   }
 
