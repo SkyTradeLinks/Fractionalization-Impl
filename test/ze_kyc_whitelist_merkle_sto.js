@@ -1,6 +1,6 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
-const { StandardMerkleTree } = require("@openzeppelin/merkle-tree");
+import { expect } from "chai";
+import { ethers } from "hardhat";
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 describe("KYCWhitelistMerkleSTO", function () {
   let contract, admin, operator, investor1, investor2, token;
