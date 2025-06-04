@@ -8,7 +8,7 @@ const HDWalletProvider = require("truffle-hdwallet-provider");
 
 let ver;
 if (process.env.POLYMATH_NATIVE_SOLC) {
-  ver = "native";
+  ver = "0.5.8";
 } else {
   ver = "0.5.8";
 }
@@ -18,7 +18,7 @@ module.exports = {
     development: {
       host: '127.0.0.1',
       port: 8545,
-      network_id: '1337', // Match any network id
+      network_id: '*', // Match any network id
       gas: 8000000
     },
     mainnet: {
