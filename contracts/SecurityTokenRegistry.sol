@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import "openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IOwnable.sol";
 import "./interfaces/ISTFactory.sol";
 import "./interfaces/ISecurityToken.sol";
@@ -298,7 +298,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
 
     /**
      * @notice Gets the security token launch fee
-     * @return Fee amount
+     * Fee amount
      */
     function getSecurityTokenLaunchFee() public returns(uint256 polyFee) {
         (, polyFee) = getFees(STLAUNCHFEE);
@@ -306,7 +306,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
 
     /**
      * @notice Gets the ticker registration fee
-     * @return Fee amount
+     * Fee amount
      */
     function getTickerRegistrationFee() public returns(uint256 polyFee) {
         (, polyFee) = getFees(TICKERREGFEE);
@@ -349,7 +349,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
             _deleteTickerOwnership(previousOwner, ticker);
         }
         /*solium-disable-next-line security/no-block-members*/
-        _addTicker(_owner, ticker, now, now.add(getUintValue(EXPIRYLIMIT)), false, false, polyFee, usdFee);
+        _addTicker(_owner, ticker, block.timestamp, block.timestamp.add(getUintValue(EXPIRYLIMIT)), false, false, polyFee, usdFee);
     }
 
     /**
@@ -473,7 +473,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
     /**
      * @notice Checks if the entered ticker is registered and has not expired
      * @param _ticker is the token ticker
-     * @return bool
+     * bool
      */
     function tickerAvailable(string memory _ticker) public view returns(bool) {
         if (_tickerOwner(_ticker) != address(0)) {
@@ -788,7 +788,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
     /**
     * @notice Checks that Security Token is registered
     * @param _securityToken is the address of the security token
-    * @return bool
+    * bool
     */
     function isSecurityToken(address _securityToken) external view returns(bool) {
         return (keccak256(bytes(getStringValue(Encoder.getKey("securityTokens_ticker", _securityToken)))) != keccak256(""));
@@ -949,7 +949,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
 
     /**
      * @notice Check whether the registry is paused or not
-     * @return bool
+     * bool
      */
     function isPaused() public view returns(bool) {
         return getBoolValue(PAUSED);
@@ -957,7 +957,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
 
     /**
      * @notice Gets the owner of the contract
-     * @return address owner
+     * address owner
      */
     function owner() public view returns(address) {
         return getAddressValue(OWNER);

@@ -9,17 +9,18 @@ import "../interfaces/ISecurityToken.sol";
 import "../interfaces/ICheckPermission.sol";
 import "../storage/modules/ModuleStorage.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title Interface that any module contract should implement
  * @notice Contract is abstract
  */
-contract Module is IModule, ModuleStorage, Pausable {
+abstract contract Module is IModule, ModuleStorage, Pausable {
     /**
      * @notice Constructor
      * @param _securityToken Address of the security token
      */
-    constructor (address _securityToken, address _polyAddress) public
+    constructor (address _securityToken, address _polyAddress)
     ModuleStorage(_securityToken, _polyAddress)
     {
     }
@@ -87,6 +88,6 @@ contract Module is IModule, ModuleStorage, Pausable {
     */
     function reclaimETH() external {
         _onlySecurityTokenOwner();
-        msg.sender.transfer(address(this).balance);
+        payable(msg.sender).transfer(address(this).balance);
     }
 }

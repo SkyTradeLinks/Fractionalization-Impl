@@ -8,7 +8,6 @@ import "../../../../interfaces/IOwnable.sol";
  * @title Checkpoint module for issuing ether dividends
  */
 contract EtherDividendCheckpoint is DividendCheckpoint {
-    using SafeMath for uint256;
 
     event EtherDividendDeposited(
         address indexed _depositor,

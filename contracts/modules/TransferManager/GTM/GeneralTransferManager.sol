@@ -12,7 +12,6 @@ import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.s
  * @title Transfer Manager module for core transfer validation functionality
  */
 contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManager {
-    using SafeMath for uint256;
     using ECDSA for bytes32;
 
     // Emit when trading restriction manager address get changed

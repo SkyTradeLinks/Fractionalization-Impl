@@ -17,7 +17,6 @@ import "../../Module.sol";
  * @dev abstract contract
  */
 contract DividendCheckpoint is DividendCheckpointStorage, ICheckpoint, Module {
-    using SafeMath for uint256;
     uint256 internal constant e18 = uint256(10) ** uint256(18);
 
     event SetDefaultExcludedAddresses(address[] _excluded);
