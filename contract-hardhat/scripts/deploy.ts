@@ -51,12 +51,6 @@ async function main() {
 
   console.log({ TradingRestrictionManagerContractAddress })
 
-  const SampleNFT = await ethers.deployContract("SampleNFT", deployer);
-  await SampleNFT.waitForDeployment();
-  const SampleNFTContractAddress = await SampleNFT.getAddress();
-
-  console.log({ SampleNFTContractAddress })
-
   const paddedPOLY = ethers.zeroPadValue(web3.utils.fromAscii("POLY"), 32)
   const paddedUSD = ethers.zeroPadValue(web3.utils.fromAscii("USD"), 32)
   const paddedETH = ethers.zeroPadValue(web3.utils.fromAscii("ETH"), 32)
@@ -183,11 +177,7 @@ async function main() {
   await VestingEscrowWalletLogic.waitForDeployment();
   const VestingEscrowWalletLogicContractAddress = await VestingEscrowWalletLogic.getAddress();
   console.log({VestingEscrowWalletLogicContractAddress})
-  
-  const GeneralFractionalizerLogic = await ethers.deployContract("GeneralFractionalizer", [nullAddress, nullAddress], deployer);
-  await GeneralFractionalizerLogic.waitForDeployment();
-  const GeneralFractionalizerLogicContractAddress = await GeneralFractionalizerLogic.getAddress();
-  console.log({ GeneralFractionalizerLogicContractAddress })
+
   
   const DataStoreLogic = await ethers.deployContract("DataStore", deployer);
   await DataStoreLogic.waitForDeployment();
@@ -255,11 +245,6 @@ async function main() {
   await VestingEscrowWalletFactory.waitForDeployment();
   const VestingEscrowWalletFactoryContractAddress = await VestingEscrowWalletFactory.getAddress();
   console.log({VestingEscrowWalletFactoryContractAddress})
-
-  const GeneralFractionalizerFactory = await ethers.deployContract("GeneralFractionalizerFactory", [0, GeneralFractionalizerLogicContractAddress, PolymathRegistryContractAddress], deployer);
-  await GeneralFractionalizerFactory.waitForDeployment();
-  const GeneralFractionalizerFactoryContractAddress = await GeneralFractionalizerFactory.getAddress();
-  console.log({ GeneralFractionalizerFactoryContractAddress })
 
   const STGetter = await ethers.getContractFactory("STGetter",  { 
     signer: deployer, 
@@ -340,7 +325,6 @@ async function main() {
   await moduleRegistry.registerModule(ManualApprovalTransferManagerFactoryContractAddress)
   await moduleRegistry.registerModule(ERC20DividendCheckpointFactoryContractAddress)
   await moduleRegistry.registerModule(VestingEscrowWalletFactoryContractAddress)
-  await moduleRegistry.registerModule(GeneralFractionalizerFactoryContractAddress)
   
   await moduleRegistry.verifyModule(GeneralTransferManagerFactoryContractAddress)
   await moduleRegistry.verifyModule(CountTransferManagerFactoryContractAddress)
@@ -351,7 +335,6 @@ async function main() {
   await moduleRegistry.verifyModule(VolumeRestrictionTMFactoryContractAddress,)
   await moduleRegistry.verifyModule(ManualApprovalTransferManagerFactoryContractAddress)
   await moduleRegistry.verifyModule(VestingEscrowWalletFactoryContractAddress)
-  await moduleRegistry.verifyModule(GeneralFractionalizerFactoryContractAddress)
 
   const CappedSTOFactory = await ethers.deployContract("CappedSTOFactory", [0, CappedSTOLogicContractAddress, PolymathRegistryContractAddress], deployer);
   await CappedSTOFactory.waitForDeployment();
