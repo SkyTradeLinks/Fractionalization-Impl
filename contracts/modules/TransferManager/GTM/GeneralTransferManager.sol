@@ -1,10 +1,10 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../TransferManager.sol";
 import "../../../libraries/Encoder.sol";
 import "../../../libraries/VersionUtils.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./GeneralTransferManagerStorage.sol";
 import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.sol";
 
@@ -14,6 +14,9 @@ import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.s
 contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManager {
     using SafeMath for uint256;
     using ECDSA for bytes32;
+
+    // Emit when trading restriction manager address get changed
+    event TradingRestrictionManagerUpdated(address indexed newManager);
 
     // Emit when Issuance address get changed
     event ChangeIssuanceAddress(address _issuanceAddress);
@@ -64,6 +67,15 @@ contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManage
      */
     function getInitFunction() public pure returns(bytes4) {
         return bytes4(0);
+    }
+
+    /**
+     * @notice Sets the address of the trading restriction (KYC) manager contract
+     * @param restrictionManager Address of the Trading Restriction Manager contract
+     */
+    function setTradingRestrictionManager(address restrictionManager) public withPerm(ADMIN) {
+        tradingRestrictionManager = ITradingRestrictionManager(restrictionManager);
+        emit TradingRestrictionManagerUpdated(restrictionManager);
     }
 
     /**
@@ -580,7 +592,7 @@ contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManage
     {
         // uint256 data = dataStore.getUint256(_getKey(WHITELIST, _investor));
         // (canSendAfter, canReceiveAfter, expiryTime, added)  = VersionUtils.unpackKYC(data);
-        (canSendAfter, canReceiveAfter, expiryTime, added) = ITradingRestrictionManager(restrictionManager).getInvestorKYCData(_investor, address(securityToken));
+        (canSendAfter, canReceiveAfter, expiryTime, added) = tradingRestrictionManager.getInvestorKYCData(_investor, address(securityToken));
     }
 
     function _isExistingInvestor(address _investor, IDataStore dataStore) internal view returns(bool) {
@@ -588,7 +600,7 @@ contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManage
         // //extracts `added` from packed `_whitelistData`
         // return uint8(data) == 0 ? false : true;
 
-        return ITradingRestrictionManager(restrictionManager).isExistingInvestor(_investor);
+        return tradingRestrictionManager.isExistingInvestor(_investor);
     }
 
     function _getValuesForTransfer(address _from, address _to) internal view returns(uint64 canSendAfter, uint64 fromExpiry, uint64 canReceiveAfter, uint64 toExpiry) {

@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 /**
  * @title Interface for all security tokens
@@ -29,7 +30,7 @@ interface ISecurityToken {
      * @return byte Ethereum status code (ESC)
      * @return bytes32 Application specific reason code
      */
-    function canTransfer(address _to, uint256 _value, bytes calldata _data) external view returns (byte statusCode, bytes32 reasonCode);
+    function canTransfer(address _to, uint256 _value, bytes calldata _data) external view returns (bytes32 statusCode, bytes32 reasonCode);
 
     // Emit at the time when module get added
     event ModuleAdded(
@@ -147,7 +148,7 @@ interface ISecurityToken {
     )
         external
         view
-        returns (byte statusCode, bytes32 reasonCode, bytes32 partition);
+        returns (byte1 statusCode, bytes32 reasonCode, bytes32 partition);
 
     /**
      * @notice Transfers of securities may fail for a number of reasons. So this function will used to understand the
@@ -160,7 +161,7 @@ interface ISecurityToken {
      * @return byte Ethereum status code (ESC)
      * @return bytes32 Application specific reason code
      */
-    function canTransferFrom(address _from, address _to, uint256 _value, bytes calldata _data) external view returns (byte statusCode, bytes32 reasonCode);
+    function canTransferFrom(address _from, address _to, uint256 _value, bytes calldata _data) external view returns (byte1 statusCode, bytes32 reasonCode);
 
     /**
      * @notice Used to attach a new document to the contract, or update the URI or hash of an existing attached document

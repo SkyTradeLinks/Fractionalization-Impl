@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../libraries/VersionUtils.sol";
 import "../libraries/Util.sol";
@@ -6,8 +7,8 @@ import "../interfaces/IModule.sol";
 import "../interfaces/IOracle.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../interfaces/IModuleFactory.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin/contracts/access/Ownable.sol";
 import "../libraries/DecimalMath.sol";
 
 /**

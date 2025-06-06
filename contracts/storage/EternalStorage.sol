@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 contract EternalStorage {
     /// @notice Internal mappings used to store all kinds on data into the contract

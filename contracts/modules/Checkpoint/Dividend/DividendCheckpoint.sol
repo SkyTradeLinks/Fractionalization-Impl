@@ -5,13 +5,12 @@
  * the function may fail. If this happens investors can pull their dividends, or the Issuer
  * can use pushDividendPaymentToAddresses to provide an explict address list in batches
  */
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import ".././ICheckpoint.sol";
 import "../../../storage/modules/Checkpoint/Dividend/DividendCheckpointStorage.sol";
 import "../../Module.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/math/Math.sol";
 
 /**
  * @title Checkpoint module for issuing ether dividends

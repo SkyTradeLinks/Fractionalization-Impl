@@ -1,18 +1,16 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../STO.sol";
 import "../../../interfaces/IPolymathRegistry.sol";
 import "../../../interfaces/IOracle.sol";
 import "../../../libraries/DecimalMath.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "./USDTieredSTOStorage.sol";
-import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.sol";
 
 /**
  * @title STO module for standard capped crowdsale
  */
 contract USDTieredSTO is USDTieredSTOStorage, STO {
-    using SafeMath for uint256;
 
     string internal constant POLY_ORACLE = "PolyUsdOracle";
     string internal constant ETH_ORACLE = "EthUsdOracle";
@@ -345,7 +343,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
     /**
     * @notice fallback function - assumes ETH being invested
     */
-    function() external payable {
+    fallback() external payable {
         buyWithETHRateLimited(msg.sender, 0);
     }
 
@@ -358,11 +356,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
         return buyWithPOLYRateLimited(_beneficiary, _investedPOLY, 0);
     }
 
-    function buyWithUSD(address _beneficiary, uint256 _investedSC, IERC20 _usdToken, bytes32[] calldata proof, uint64 expiry, bool isAccredited, ITradingRestrictionManager.InvestorClass investorClass) external returns (uint256, uint256, uint256) {
-        require (
-            ITradingRestrictionManager(restrictionManager).verifyInvestor(proof, _beneficiary, expiry, isAccredited, investorClass),
-            "Investor verification failed"
-        );
+    function buyWithUSD(address _beneficiary, uint256 _investedSC, IERC20 _usdToken) external returns (uint256, uint256, uint256) {
         return buyWithUSDRateLimited(_beneficiary, _investedSC, 0, _usdToken);
     }
 

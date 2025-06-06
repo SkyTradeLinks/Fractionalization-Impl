@@ -1,14 +1,12 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "./OZStorage.sol";
 import "./SecurityTokenStorage.sol";
 import "../libraries/TokenLib.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "../modules/PermissionManager/IPermissionManager.sol";
 
 contract STGetter is OZStorage, SecurityTokenStorage {
-
-    using SafeMath for uint256;
 
     /**
      * @notice A security token issuer can specify that issuance has finished for the token

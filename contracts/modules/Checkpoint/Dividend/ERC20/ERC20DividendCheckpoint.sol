@@ -1,16 +1,15 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../DividendCheckpoint.sol";
 import "./ERC20DividendCheckpointStorage.sol";
 import "../../../../interfaces/IOwnable.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title Checkpoint module for issuing ERC20 dividends
  */
 contract ERC20DividendCheckpoint is ERC20DividendCheckpointStorage, DividendCheckpoint {
-    using SafeMath for uint256;
-
     event ERC20DividendDeposited(
         address indexed _depositor,
         uint256 _checkpointId,

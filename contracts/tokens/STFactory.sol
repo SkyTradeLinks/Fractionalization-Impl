@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "./SecurityTokenProxy.sol";
 import "../proxy/OwnedUpgradeabilityProxy.sol";
@@ -6,7 +7,7 @@ import "../interfaces/ISTFactory.sol";
 import "../interfaces/ISecurityToken.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../interfaces/IOwnable.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IModuleRegistry.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../datastore/DataStoreFactory.sol";

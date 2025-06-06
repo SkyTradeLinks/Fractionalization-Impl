@@ -1,8 +1,9 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../interfaces/IOracle.sol";
 import "../external/IMedianizer.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MakerDAOOracle is IOracle, Ownable {
     IMedianizer public medianizer;

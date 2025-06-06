@@ -1,30 +1,23 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.5.8;
+pragma solidity 0.8.30;
 
 interface ITradingRestrictionManager {
     enum InvestorClass { NonUS, US }
 
     struct InvestorKYCData {
-        bytes32[] proof;
         uint64 expiryTime;
         InvestorClass investorClass;
     }
 
-    event InvestorKYCDataUpdated(address indexed investor, bytes32[] proof, uint64 expiryTime, bool isAccredited, InvestorClass investorClass);
+    event InvestorKYCDataUpdated(address indexed investor, uint64 expiryTime, InvestorClass investorClass);
     event WhitelistOnlyTradingUpdated(address indexed token, bool status);
-    event MerkleRootUpdated(bytes32 root);
 
     function modifyKYCData(
-        bytes32 root
-    ) external;
-
-    function verifyInvestor(
-        bytes32[] calldata proof,
         address investor,
-        uint64 expiry,
+        uint64 expiryTime,
         bool isAccredited,
         InvestorClass investorClass
-    ) external returns (bool);
+    ) external;
 
     function setTradingRestrictionPeriod(
         address token,

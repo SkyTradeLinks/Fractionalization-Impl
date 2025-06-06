@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../interfaces/IPoly.sol";
 import "./StatusCodes.sol";
@@ -7,13 +8,10 @@ import "../interfaces/IDataStore.sol";
 import "../tokens/SecurityTokenStorage.sol";
 import "../interfaces/ITransferManager.sol";
 import "../modules/UpgradableModuleFactory.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "../modules/PermissionManager/IPermissionManager.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 library TokenLib {
-
-    using SafeMath for uint256;
 
     struct EIP712Domain {
         string  name;
@@ -463,7 +461,7 @@ library TokenLib {
     )
         external
         pure
-        returns (byte, bytes32)
+        returns (bytes1, bytes32)
     {
         if (!success)
             return (StatusCodes.code(StatusCodes.Status.TransferFailure), appCode);

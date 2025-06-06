@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../proxy/Proxy.sol";
 import "../interfaces/IModule.sol";
@@ -13,8 +14,9 @@ import "../interfaces/token/IERC1594.sol";
 import "../interfaces/token/IERC1643.sol";
 import "../interfaces/token/IERC1644.sol";
 import "../interfaces/ITransferManager.sol";
-import "openzeppelin-solidity/contracts/utils/ReentrancyGuard.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
  * @title Security Token contract
@@ -26,7 +28,7 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
  * @notice - ST does not inherit from ISecurityToken due to:
  * @notice - https://github.com/ethereum/solidity/issues/4847
  */
-contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594, IERC1643, IERC1644, IERC1410, Proxy {
+contract SecurityToken is ERC721Holder, ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594, IERC1643, IERC1644, IERC1410, Proxy {
 
     using SafeMath for uint256;
 
@@ -914,7 +916,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      * @return byte Ethereum status code (ESC)
      * @return bytes32 Application specific reason code
      */
-    function canTransfer(address _to, uint256 _value, bytes calldata _data) external view returns (byte, bytes32) {
+    function canTransfer(address _to, uint256 _value, bytes calldata _data) external view returns (bytes1, bytes32) {
         return _canTransfer(msg.sender, _to, _value, _data);
     }
 
@@ -929,14 +931,14 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      * @return byte Ethereum status code (ESC)
      * @return bytes32 Application specific reason code
      */
-    function canTransferFrom(address _from, address _to, uint256 _value, bytes calldata _data) external view returns (byte reasonCode, bytes32 appCode) {
+    function canTransferFrom(address _from, address _to, uint256 _value, bytes calldata _data) external view returns (bytes1 reasonCode, bytes32 appCode) {
         (reasonCode, appCode) = _canTransfer(_from, _to, _value, _data);
         if (_isSuccess(reasonCode) && _value > allowance(_from, msg.sender)) {
             return (StatusCodes.code(StatusCodes.Status.InsufficientAllowance), bytes32(0));
         }
     }
 
-    function _canTransfer(address _from, address _to, uint256 _value, bytes memory _data) internal view returns (byte, bytes32) {
+    function _canTransfer(address _from, address _to, uint256 _value, bytes memory _data) internal view returns (bytes1, bytes32) {
         bytes32 appCode;
         bool success;
         if (_value % granularity != 0) {
@@ -967,7 +969,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     )
         external
         view
-        returns (byte reasonCode, bytes32 appStatusCode, bytes32 toPartition)
+        returns (bytes1 reasonCode, bytes32 appStatusCode, bytes32 toPartition)
     {
         if (_partition == UNLOCKED) {
             (reasonCode, appStatusCode) = _canTransfer(_from, _to, _value, _data);
@@ -1103,7 +1105,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     * @param status Binary ERC-1066 status code
     * @return successful A boolean representing if the status code represents success
     */
-    function _isSuccess(byte status) internal pure returns (bool successful) {
+    function _isSuccess(bytes1 status) internal pure returns (bool successful) {
         return (status & 0x0F) == 0x01;
     }
 }

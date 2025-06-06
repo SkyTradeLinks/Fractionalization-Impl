@@ -1,13 +1,11 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../interfaces/IDataStore.sol";
 import "./BokkyPooBahsDateTimeLibrary.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "../modules/TransferManager/VRTM/VolumeRestrictionTMStorage.sol";
 
 library VolumeRestrictionLib {
-
-    using SafeMath for uint256;
 
     uint256 internal constant ONE = uint256(1);
     uint8 internal constant INDEX = uint8(2);

@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "./ReclaimTokens.sol";
 import "./interfaces/IPolymathRegistry.sol";
@@ -8,6 +9,8 @@ import "./interfaces/IPolymathRegistry.sol";
  */
 contract PolymathRegistry is ReclaimTokens, IPolymathRegistry {
     mapping(bytes32 => address) public storedAddresses;
+
+    constructor(address initialOwner) ReclaimTokens(initialOwner) {}
 
     /**
      * @notice Gets the contract address

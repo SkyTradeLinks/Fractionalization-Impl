@@ -1,8 +1,8 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../external/oraclizeAPI.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IOracle.sol";
 
 contract PolyOracle is usingOraclize, IOracle, Ownable {

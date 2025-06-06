@@ -1,12 +1,10 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../interfaces/IOracle.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract StableOracle is IOracle, Ownable {
-    using SafeMath for uint256;
-
     IOracle public oracle;
     uint256 public lastPrice;
     uint256 public evictPercentage; //% multiplid by 10**16

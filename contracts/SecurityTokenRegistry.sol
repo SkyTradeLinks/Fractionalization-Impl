@@ -6,10 +6,10 @@
 
  */
 
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IOwnable.sol";
 import "./interfaces/ISTFactory.sol";
 import "./interfaces/ISecurityToken.sol";
@@ -71,8 +71,6 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
        }
 
      */
-
-    using SafeMath for uint256;
 
     bytes32 constant INITIALIZE = 0x9ef7257c3339b099aacf96e55122ee78fb65a36bd2a6c19249882be9c98633bf; //keccak256("initialised")
     bytes32 constant POLYTOKEN = 0xacf8fbd51bb4b83ba426cdb12f63be74db97c412515797993d2a385542e311d7; //keccak256("polyToken")
