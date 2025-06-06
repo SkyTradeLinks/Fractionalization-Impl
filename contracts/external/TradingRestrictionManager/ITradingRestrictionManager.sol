@@ -15,10 +15,7 @@ interface ITradingRestrictionManager {
     event MerkleRootUpdated(bytes32 root);
 
     function modifyKYCData(
-        address investor,
-        uint64 expiryTime,
-        bool isAccredited,
-        InvestorClass investorClass
+        bytes32 root
     ) external;
 
     function verifyInvestor(
