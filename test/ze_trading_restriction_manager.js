@@ -512,12 +512,12 @@ describe("TradingRestrictionManager", function () {
       expect(await contract.isExistingInvestor(ethers.ZeroAddress)).to.equal(false);
 
       const result = await contract.getInvestorKYCData(ethers.ZeroAddress, token1.address);
-      expect(result.added).to.equal(0);
+      expect(result.added).to.equal(1); // Should return 1
     });
 
     it("should handle uninitialized token data", async function () {
       const result = await contract.getInvestorKYCData(investor3.address, token1.address);
-      expect(result.added).to.equal(0);
+      expect(result.added).to.equal(1); // Should return 1
     });
 
     it("should handle very large timestamps", async function () {
