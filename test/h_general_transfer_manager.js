@@ -980,7 +980,7 @@ contract("GeneralTransferManager", async (accounts) => {
                 validFrom,
                 validTo,
                 nonce,
-                "0x" + token_owner_pk
+                signer.privateKey
             );
 
             await I_GeneralTransferManager.modifyKYCDataSigned(
