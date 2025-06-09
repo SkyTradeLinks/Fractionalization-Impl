@@ -70,7 +70,7 @@ library Util {
     /**
      * @notice Gets function signature from _data
      * @param _data Passed data
-     * @return sig
+     *  sig
      */
     function getSig(bytes memory _data) internal pure returns(bytes4 sig) {
         uint len = _data.length < 4 ? _data.length : 4;

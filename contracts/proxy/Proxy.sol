@@ -8,7 +8,7 @@ pragma solidity 0.8.30;
 abstract contract Proxy {
     /**
     * @dev Tells the address of the implementation where every call will be delegated.
-    * @return address of the implementation to which it will be delegated
+    *  address of the implementation to which it will be delegated
     */
     function _implementation() internal view virtual returns(address);
 

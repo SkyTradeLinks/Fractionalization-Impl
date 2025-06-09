@@ -25,7 +25,7 @@ contract ModuleStorage {
      * @param _securityToken Address of the security token
      * @param _polyAddress Address of the polytoken
      */
-    constructor(address _securityToken, address _polyAddress) public {
+    constructor(address _securityToken, address _polyAddress) {
         securityToken = ISecurityToken(_securityToken);
         factory = msg.sender;
         polyToken = IERC20(_polyAddress);

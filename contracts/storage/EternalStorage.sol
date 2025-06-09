@@ -75,7 +75,7 @@ contract EternalStorage {
         address[] storage array = addressArrayStorage[_key];
         require(_index < array.length, "Index should less than length of the array");
         array[_index] = array[array.length - 1];
-        array.length = array.length - 1;
+        array.pop();
     }
 
     //Deletes from mapping (bytes32 => bytes32[]) at index _index
@@ -83,7 +83,7 @@ contract EternalStorage {
         bytes32[] storage array = bytes32ArrayStorage[_key];
         require(_index < array.length, "Index should less than length of the array");
         array[_index] = array[array.length - 1];
-        array.length = array.length - 1;
+        array.pop();
     }
 
     //Deletes from mapping (bytes32 => uint[]) at index _index
@@ -91,7 +91,7 @@ contract EternalStorage {
         uint256[] storage array = uintArrayStorage[_key];
         require(_index < array.length, "Index should less than length of the array");
         array[_index] = array[array.length - 1];
-        array.length = array.length - 1;
+        array.pop();
     }
 
     //Deletes from mapping (bytes32 => string[]) at index _index
@@ -99,7 +99,7 @@ contract EternalStorage {
         string[] storage array = stringArrayStorage[_key];
         require(_index < array.length, "Index should less than length of the array");
         array[_index] = array[array.length - 1];
-        array.length = array.length - 1;
+        array.pop();
     }
 
     ////////////////////////////

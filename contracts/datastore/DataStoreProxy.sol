@@ -30,7 +30,7 @@ contract DataStoreProxy is DataStoreStorage, Proxy {
     /**
     * @notice Internal function to provide the address of the implementation contract
     */
-    function _implementation() internal view returns(address) {
+    function _implementation() internal override view returns(address) {
         return __implementation;
     }
 

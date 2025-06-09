@@ -25,7 +25,7 @@ abstract contract TransferManager is ITransferManager, Module {
      * This condition is valid only when the base contract doesn't implement the
      * `getTokensByPartition()` function.  
      */
-    function getTokensByPartition(bytes32 _partition, address _tokenHolder, uint256 /*_additionalBalance*/) external view returns(uint256) {
+    function getTokensByPartition(bytes32 _partition, address _tokenHolder, uint256 /*_additionalBalance*/) external virtual view returns(uint256) {
         if (_partition == UNLOCKED)
             return securityToken.balanceOf(_tokenHolder);
         return uint256(0);

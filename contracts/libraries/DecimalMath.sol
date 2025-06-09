@@ -6,7 +6,7 @@ library DecimalMath {
 
     /**
      * @notice This function multiplies two decimals represented as (decimal * 10**DECIMALS)
-     * @return z
+     *  z
      */
     function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
         z = (x * y + e18 / 2) / e18;
@@ -14,7 +14,7 @@ library DecimalMath {
 
     /**
      * @notice This function divides two decimals represented as (decimal * 10**DECIMALS)
-     * @return z
+     *  z
      */
     function div(uint256 x, uint256 y) internal pure returns (uint256 z) {
         z = (x * e18 + y / 2) / y;

@@ -187,7 +187,7 @@ library TokenLib {
         bytes32 name = _modulesToData[_module].name;
         uint256 length = _names[name].length;
         _names[name][index] = _names[name][length - 1];
-        _names[name].length = length - 1;
+        _names[name].pop();
         if ((length - 1) != index) {
             _modulesToData[_names[name][index]].nameIndex = index;
         }
@@ -208,7 +208,7 @@ library TokenLib {
     {
         uint256 length = _modules[_type].length;
         _modules[_type][_index] = _modules[_type][length - 1];
-        _modules[_type].length = length - 1;
+        _modules[_type].pop();
 
         if ((length - 1) != _index) {
             //Need to find index of _type in moduleTypes of module we are moving
@@ -241,10 +241,10 @@ library TokenLib {
         uint256 newAllowance;
         if (_increase) {
             require(IPoly(address(_polyToken)).increaseApproval(_module, _change), "IncreaseApproval fail");
-            newAllowance = currentAllowance.add(_change);
+            newAllowance = currentAllowance + (_change);
         } else {
             require(IPoly(address(_polyToken)).decreaseApproval(_module, _change), "Insufficient allowance");
-            newAllowance = currentAllowance.sub(_change);
+            newAllowance = currentAllowance - (_change);
         }
         emit ModuleBudgetChanged(_modulesToData[_module].moduleTypes, _module, currentAllowance, newAllowance);
     }
@@ -254,7 +254,7 @@ library TokenLib {
      * @param _checkpoints is array of Checkpoint objects
      * @param _checkpointId is the Checkpoint ID to query
      * @param _currentValue is the Current value of checkpoint
-     * @return uint256
+     *  uint256
      */
     function getValueAt(SecurityTokenStorage.Checkpoint[] storage _checkpoints, uint256 _checkpointId, uint256 _currentValue) external view returns(uint256) {
         //Checkpoint id 0 is when the token is first created - everyone has a zero balance
@@ -336,7 +336,7 @@ library TokenLib {
         }
         // Check whether receiver is a new token holder
         if ((_balanceTo == 0) && (_to != address(0))) {
-            holderCount = holderCount.add(1);
+            holderCount = holderCount + (1);
             if (!_isExistingInvestor(_to, _dataStore)) {
                 _dataStore.insertAddress(INVESTORSKEY, _to);
                 //KYC data can not be present if added is false and hence we can set packed KYC as uint256(1) to set added as true
@@ -345,7 +345,7 @@ library TokenLib {
         }
         // Check whether sender is moving all of their tokens
         if (_value == _balanceFrom) {
-            holderCount = holderCount.sub(1);
+            holderCount = holderCount - (1);
         }
 
         return holderCount;
@@ -373,7 +373,7 @@ library TokenLib {
             docNames.push(name);
             docIndexes[name] = docNames.length;
         }
-        document[name] = SecurityTokenStorage.Document(documentHash, now, uri);
+        document[name] = SecurityTokenStorage.Document(documentHash, block.timestamp, uri);
         emit DocumentUpdated(name, uri, documentHash);
     }
 
@@ -396,7 +396,7 @@ library TokenLib {
             docNames[index] = docNames[docNames.length - 1];
             docIndexes[docNames[index]] = index + 1;
         }
-        docNames.length--;
+        docNames.pop();
         emit DocumentRemoved(name, document[name].uri, document[name].docHash);
         delete document[name];
     }
@@ -411,7 +411,7 @@ library TokenLib {
      * @param value value of transfer
      * @param data data to indicate validation
      * @param transfersFrozen whether the transfer are frozen or not.
-     * @return bool
+     *  bool
      */
     function verifyTransfer(
         address[] storage modules,

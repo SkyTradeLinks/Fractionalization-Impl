@@ -22,8 +22,8 @@ contract GeneralPermissionManagerFactory is UpgradableModuleFactory {
         address _polymathRegistry,
         bool _isCostInPoly
     )
-        public
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
+        Ownable(msg.sender)
     {
         name = "GeneralPermissionManager";
         title = "General Permission Manager";

@@ -321,7 +321,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         set(STRGETTER, _getterContract);
     }
 
-    function _implementation() internal view returns(address) {
+    function _implementation() internal override view returns(address) {
         return getAddressValue(STRGETTER);
     }
 
@@ -349,7 +349,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
             _deleteTickerOwnership(previousOwner, ticker);
         }
         /*solium-disable-next-line security/no-block-members*/
-        _addTicker(_owner, ticker, block.timestamp, block.timestamp.add(getUintValue(EXPIRYLIMIT)), false, false, polyFee, usdFee);
+        _addTicker(_owner, ticker, block.timestamp, block.timestamp + (getUintValue(EXPIRYLIMIT)), false, false, polyFee, usdFee);
     }
 
     /**
@@ -358,7 +358,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
     function registerTicker(address _owner, string calldata _ticker, string calldata _tokenName) external {
         registerNewTicker(_owner, _ticker);
         (, uint256 polyFee) = getFees(TICKERREGFEE);
-        emit RegisterTicker(_owner, _ticker, _tokenName, now, now.add(getUintValue(EXPIRYLIMIT)), false, polyFee);
+        emit RegisterTicker(_owner, _ticker, _tokenName, block.timestamp, block.timestamp + (getUintValue(EXPIRYLIMIT)), false, polyFee);
     }
 
     /**
@@ -422,7 +422,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         external
     {
         modifyExistingTicker(_owner, _ticker, _registrationDate, _expiryDate, _status);
-        emit RegisterTicker(_owner, _ticker, _tokenName, now, now.add(getUintValue(EXPIRYLIMIT)), false, 0);
+        emit RegisterTicker(_owner, _ticker, _tokenName, block.timestamp, block.timestamp + (getUintValue(EXPIRYLIMIT)), false, 0);
     }
 
     /**
@@ -478,7 +478,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
     function tickerAvailable(string memory _ticker) public view returns(bool) {
         if (_tickerOwner(_ticker) != address(0)) {
             /*solium-disable-next-line security/no-block-members*/
-            if ((now > getUintValue(Encoder.getKey("registeredTickers_expiryDate", _ticker))) && !_tickerStatus(_ticker)) {
+            if ((block.timestamp > getUintValue(Encoder.getKey("registeredTickers_expiryDate", _ticker))) && !_tickerStatus(_ticker)) {
                 return true;
             } else return false;
         }
@@ -631,18 +631,18 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         address issuer = msg.sender;
         require(_tickerOwner(_ticker) == issuer, "Not authorised");
         /*solium-disable-next-line security/no-block-members*/
-        require(getUintValue(Encoder.getKey("registeredTickers_expiryDate", _ticker)) >= now, "Ticker expired");
+        require(getUintValue(Encoder.getKey("registeredTickers_expiryDate", _ticker)) >= block.timestamp, "Ticker expired");
         (uint256 _usdFee, uint256 _polyFee) = _takeFee(STLAUNCHFEE);
         address newSecurityTokenAddress =
             _deployToken(_name, _ticker, _tokenDetails, issuer, _divisible, _treasuryWallet, _protocolVersion);
         if (_protocolVersion == VersionUtils.pack(2, 0, 0)) {
             // For backwards compatibilty. Should be removed with an update when we disable st 2.0 generation.
             emit NewSecurityToken(
-                _ticker, _name, newSecurityTokenAddress, issuer, now, issuer, false, _polyFee
+                _ticker, _name, newSecurityTokenAddress, issuer, block.timestamp, issuer, false, _polyFee
             );
         } else {
             emit NewSecurityToken(
-                _ticker, _name, newSecurityTokenAddress, issuer, now, issuer, false, _usdFee, _polyFee, _protocolVersion
+                _ticker, _name, newSecurityTokenAddress, issuer, block.timestamp, issuer, false, _usdFee, _polyFee, _protocolVersion
             );
         }
     }
@@ -677,7 +677,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         address newSecurityTokenAddress =
             _deployToken(_name, ticker, _tokenDetails, stOwner, _divisible, _treasuryWallet, protocolVersion);
         emit SecurityTokenRefreshed(
-            _ticker, _name, newSecurityTokenAddress, stOwner, now, stOwner, protocolVersion
+            _ticker, _name, newSecurityTokenAddress, stOwner, block.timestamp, stOwner, protocolVersion
         );
     }
 
@@ -714,7 +714,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         );
 
         /*solium-disable-next-line security/no-block-members*/
-        _storeSecurityTokenData(newSecurityTokenAddress, _ticker, _tokenDetails, now);
+        _storeSecurityTokenData(newSecurityTokenAddress, _ticker, _tokenDetails, block.timestamp);
         set(Encoder.getKey("tickerToSecurityToken", _ticker), newSecurityTokenAddress);
     }
 
@@ -744,8 +744,8 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         uint256 expiryTime = getUintValue(Encoder.getKey("registeredTickers_expiryDate", ticker));
         if (registrationTime == 0) {
             /*solium-disable-next-line security/no-block-members*/
-            registrationTime = now;
-            expiryTime = registrationTime.add(getUintValue(EXPIRYLIMIT));
+            registrationTime = block.timestamp;
+            expiryTime = registrationTime + (getUintValue(EXPIRYLIMIT));
         }
         set(Encoder.getKey("tickerToSecurityToken", ticker), _securityToken);
         _modifyTicker(_owner, ticker, registrationTime, expiryTime, true);

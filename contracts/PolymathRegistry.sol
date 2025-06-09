@@ -15,7 +15,7 @@ contract PolymathRegistry is ReclaimTokens, IPolymathRegistry {
     /**
      * @notice Gets the contract address
      * @param _nameKey is the key for the contract address mapping
-     * @return address
+     *  address
      */
     function getAddress(string calldata _nameKey) external view returns(address) {
         bytes32 key = keccak256(bytes(_nameKey));

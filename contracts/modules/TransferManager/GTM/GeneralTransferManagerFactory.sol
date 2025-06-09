@@ -22,8 +22,8 @@ contract GeneralTransferManagerFactory is UpgradableModuleFactory {
         address _polymathRegistry,
         bool _isCostInPoly
     )
-        public
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
+        Ownable(msg.sender)
     {
         name = "GeneralTransferManager";
         title = "General Transfer Manager";
@@ -38,7 +38,7 @@ contract GeneralTransferManagerFactory is UpgradableModuleFactory {
 
     /**
      * @notice Used to launch the Module with the help of factory
-     * @return address Contract address of the Module
+     *  address Contract address of the Module
      */
     function deploy(
         bytes calldata _data

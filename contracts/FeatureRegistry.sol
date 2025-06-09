@@ -7,7 +7,7 @@ import "./interfaces/IFeatureRegistry.sol";
 /**
  * @title Registry for managing polymath feature switches
  */
-contract FeatureRegistry is IFeatureRegistry, ReclaimTokens {
+abstract contract FeatureRegistry is IFeatureRegistry, ReclaimTokens {
     mapping(bytes32 => bool) public featureStatus;
 
     /**

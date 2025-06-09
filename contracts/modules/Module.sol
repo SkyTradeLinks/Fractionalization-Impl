@@ -49,7 +49,7 @@ abstract contract Module is IModule, ModuleStorage, Pausable {
     /**
      * @notice Pause (overridden function)
      */
-    function pause() public {
+    function pause() virtual public {
         _onlySecurityTokenOwner();
         super._pause();
     }

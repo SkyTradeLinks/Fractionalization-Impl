@@ -8,7 +8,7 @@ interface IPolymathRegistry {
     /**
      * @notice Returns the contract address
      * @param _nameKey is the key for the contract address mapping
-     * @return registryAddress
+     *  registryAddress
      */
     function getAddress(string calldata _nameKey) external view returns(address registryAddress);
 
