@@ -62,10 +62,10 @@ contract SecurityTokenStorage {
     address public tokenFactory;
     bool public initialized;
 
-    // ERC20 Details
-    string public name;
-    string public symbol;
-    uint8 public decimals;
+    // ERC20 Details - FIXED WITH 0.8.30 Upgrade
+    string internal name_;
+    string internal symbol_;
+    uint8 internal decimals_;
 
     // Address of the controller which is a delegated entity
     // set by the issuer/owner of the token
