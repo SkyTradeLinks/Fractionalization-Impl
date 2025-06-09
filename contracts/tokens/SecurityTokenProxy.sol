@@ -27,13 +27,12 @@ contract SecurityTokenProxy is OZStorage, SecurityTokenStorage, OwnedUpgradeabil
         string memory _tokenDetails,
         address _polymathRegistry
     )
-        public
     {
         //Set storage variables - NB implementation not yet set
         require(_polymathRegistry != address(0), "Invalid Address");
-        name = _name;
-        symbol = _symbol;
-        decimals = _decimals;
+        name_ = _name;
+        symbol_ = _symbol;
+        decimals_ = _decimals;
         polymathRegistry = IPolymathRegistry(_polymathRegistry);
         tokenDetails = _tokenDetails;
         granularity = _granularity;
