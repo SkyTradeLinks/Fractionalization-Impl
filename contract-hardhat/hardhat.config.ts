@@ -26,7 +26,7 @@ const config: HardhatUserConfig = {
     },
     localhost: {
       chainId: 1337,
-      url: 'http://localhost:8545',
+      url: "http://localhost:8545",
     },
     goerli: {
       url: PROVIDER_URL,
@@ -37,28 +37,28 @@ const config: HardhatUserConfig = {
       url: PROVIDER_URL,
       accounts,
       chainId: 97,
-      timeout: 60 * 60 * 1000 // 1 hour
+      timeout: 60 * 60 * 1000, // 1 hour
     },
     baseSepoliaTestnet: {
       url: PROVIDER_URL,
       accounts,
       chainId: 84532,
-      timeout: 60 * 60 * 1000 // 1 hour
+      timeout: 60 * 60 * 1000, // 1 hour
     },
     baseMainnet: {
       url: PROVIDER_URL,
       accounts,
       chainId: 8453,
-      timeout: 60 * 60 * 1000 // 1 hour
+      timeout: 60 * 60 * 1000, // 1 hour
     },
     plume: {
       url: "https://phoenix-rpc.plumenetwork.xyz",
       chainId: 98866,
       accounts,
-    }
-  }, 
+    },
+  },
   solidity: {
-    version: '0.5.8',
+    version: "0.8.30",
     settings: {
       optimizer: {
         enabled: true,
@@ -71,19 +71,19 @@ const config: HardhatUserConfig = {
   // },
   etherscan: {
     apiKey: {
-      "plume": "test"
+      plume: "test",
     },
     customChains: [
       {
         network: "plume",
         chainId: 98866,
         urls: {
-          apiURL: "https://phoenix-explorer.plumenetwork.xyz/api\?",
-          browserURL: "https://phoenix-explorer.plumenetwork.xyz"
-        }
-      }
-    ]
-  }
+          apiURL: "https://phoenix-explorer.plumenetwork.xyz/api?",
+          browserURL: "https://phoenix-explorer.plumenetwork.xyz",
+        },
+      },
+    ],
+  },
 };
 
 export default config;
