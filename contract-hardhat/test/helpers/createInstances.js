@@ -95,9 +95,9 @@ async function setUpPolymathNetwork(account_polymath, token_owner) {
     // STEP 9: Register the Modules with the ModuleRegistry contract
     await registerGTM(account_polymath);
     console.log("ModuleRegistry updated with the GeneralTransferManagerFactory address");
-    // STEP 10: Add dummy oracles - doesn't work
-    // await addOracles(account_polymath);
-    console.log("Oracles weren't added to the PolymathRegistry");
+    // STEP 10: Add dummy oracles
+    await addOracles(account_polymath);
+    console.log("Oracles added to the PolymathRegistry");
 
     const tempArray = [
         I_PolymathRegistry,
@@ -123,20 +123,16 @@ async function setUpPolymathNetwork(account_polymath, token_owner) {
 async function addOracles(account_polymath) {
     const USDETH = ethers.parseEther("500"); // 500 USD/ETH
     const USDPOLY = ethers.parseEther("0.25"); // 0.25 USD/POLY
-    const StableChange = ethers.parseEther("0.1"); // 0.1 USD/POLY
     
     const MockOracle = await ethers.getContractFactory("MockOracle");
-    const StableOracle = await ethers.getContractFactory("StableOracle");
     
     I_USDOracle = await MockOracle.deploy(ethers.ZeroAddress, ethers.formatBytes32String("ETH"), ethers.formatBytes32String("USD"), USDETH);
     
     I_POLYOracle = await MockOracle.deploy(I_PolyToken.target, ethers.formatBytes32String("POLY"), ethers.formatBytes32String("USD"), USDPOLY);
     
-    I_StablePOLYOracle = await StableOracle.deploy(I_POLYOracle.target, StableChange);
-    
     await I_PolymathRegistry.changeAddress("EthUsdOracle", I_USDOracle.target);
     await I_PolymathRegistry.changeAddress("PolyUsdOracle", I_POLYOracle.target);
-    await I_PolymathRegistry.changeAddress("StablePolyUsdOracle", I_StablePOLYOracle.target);
+    await I_PolymathRegistry.changeAddress("StablePolyUsdOracle", I_USDOracle.target);
 }
 
 async function deployPolyRegistryAndPolyToken(account_polymath, token_owner) {
