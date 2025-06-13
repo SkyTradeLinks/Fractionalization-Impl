@@ -6,6 +6,8 @@ import "../../../interfaces/IPolymathRegistry.sol";
 import "../../../interfaces/IOracle.sol";
 import "../../../libraries/DecimalMath.sol";
 import "./USDTieredSTOStorage.sol";
+import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.sol";
+
 
 /**
  * @title STO module for standard capped crowdsale
@@ -363,7 +365,11 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
         return buyWithPOLYRateLimited(_beneficiary, _investedPOLY, 0);
     }
 
-    function buyWithUSD(address _beneficiary, uint256 _investedSC, IERC20 _usdToken) external returns (uint256, uint256, uint256) {
+    function buyWithUSD(address _beneficiary, uint256 _investedSC, IERC20 _usdToken, bytes32[] calldata proof, uint64 expiry, bool isAccredited, ITradingRestrictionManager.InvestorClass investorClass) external returns (uint256, uint256, uint256) {
+        require (
+            ITradingRestrictionManager(restrictionManager).verifyInvestor(proof, _beneficiary, expiry, isAccredited, investorClass),
+            "Investor verification failed"
+        );
         return buyWithUSDRateLimited(_beneficiary, _investedSC, 0, _usdToken);
     }
 

@@ -90,4 +90,15 @@ abstract contract Module is IModule, ModuleStorage, Pausable {
         _onlySecurityTokenOwner();
         payable(msg.sender).transfer(address(this).balance);
     }
+
+
+    /**
+     * @notice Sets the address of the trading restriction (KYC) manager contract
+     * @param _restrictionManager Address of the Trading Restriction Manager contract
+     */
+    function setTradingRestrictionManager(address _restrictionManager) external {
+        _onlySecurityTokenOwner();
+        restrictionManager = ITradingRestrictionManager(_restrictionManager);
+        emit TradingRestrictionManagerUpdated(_restrictionManager);
+    }
 }

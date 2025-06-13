@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-// import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.sol";
-
 /**
  * @title Transfer Manager module for core transfer validation functionality
  */
@@ -17,9 +15,6 @@ contract GeneralTransferManagerStorage {
 
     //Address from which issuances come
     address public issuanceAddress;
-
-    //Address from which KYC come
-    // ITradingRestrictionManager public tradingRestrictionManager;
     
     // Allows all TimeRestrictions to be offset
     struct Defaults {

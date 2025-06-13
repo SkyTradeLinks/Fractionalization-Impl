@@ -3,33 +3,12 @@ pragma solidity 0.8.30;
 
 import "./ITradingRestrictionManager.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-
-/**
- * @dev Replaces OpenZeppelin's Ownable for Solidity 0.5.8
- */
-contract Ownable {
-    address public owner;
-
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    constructor() {
-        owner = msg.sender;
-    }
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Ownable: caller is not the owner");
-        _;
-    }
-
-    function transferOwnership(address newOwner) public onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
-    }
-}
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
     bytes32 private _root;
+
+    constructor() Ownable(msg.sender) {}
 
     mapping(address => bool) public isOperator;
     mapping(address => InvestorKYCData) private _kycData;
