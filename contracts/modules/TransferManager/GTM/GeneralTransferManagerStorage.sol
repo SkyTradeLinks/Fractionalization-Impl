@@ -1,4 +1,5 @@
 pragma solidity 0.5.8;
+import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.sol";
 
 /**
  * @title Transfer Manager module for core transfer validation functionality
@@ -15,6 +16,9 @@ contract GeneralTransferManagerStorage {
     //Address from which issuances come
     address public issuanceAddress;
 
+    //Address from which KYC come
+    ITradingRestrictionManager public tradingRestrictionManager;
+    
     // Allows all TimeRestrictions to be offset
     struct Defaults {
         uint64 canSendAfter;
