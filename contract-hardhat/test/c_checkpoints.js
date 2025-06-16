@@ -87,23 +87,23 @@ describe("Checkpoints", function() {
         account_investor3 = accounts[8];
         account_investor4 = accounts[9];
 
-        const TokenLibFactory = await ethers.getContractFactory("TokenLib");
-        const tokenLib = await TokenLibFactory.deploy();
-        await tokenLib.waitForDeployment();
+        // const TokenLibFactory = await ethers.getContractFactory("TokenLib");
+        // const tokenLib = await TokenLibFactory.deploy();
+        // await tokenLib.waitForDeployment();
 
-        SecurityToken = await ethers.getContractFactory("SecurityToken", {
-        libraries: {
-            TokenLib: await tokenLib.getAddress(),
-        },
-        });
+        // SecurityToken = await ethers.getContractFactory("SecurityToken", {
+        // libraries: {
+        //     TokenLib: await tokenLib.getAddress(),
+        // },
+        // });
 
-        STGetter = await ethers.getContractFactory("STGetter", {
-        libraries: {
-            TokenLib: await tokenLib.getAddress(),
-        },
-        });
+        // STGetter = await ethers.getContractFactory("STGetter", {
+        // libraries: {
+        //     TokenLib: await tokenLib.getAddress(),
+        // },
+        // });
 
-        GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
+        // GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
 
         // Step 1: Deploy the general PM ecosystem
         let instances = await setUpPolymathNetwork(account_polymath.address, token_owner.address);
@@ -124,8 +124,6 @@ describe("Checkpoints", function() {
             I_STGetter
         ] = instances;
 
-        console.log("Instances returned:", instances);
-
         // Printing all the contract addresses
         console.log(`
         --------------------- Polymath Network Smart Contracts: ---------------------
@@ -144,30 +142,48 @@ describe("Checkpoints", function() {
 
     describe("Generate the SecurityToken", async () => {
         it("Should register the ticker before the generation of the security token", async () => {
-            console.log("Registering the ticker before the generation of the security token", token_owner.address, symbol);
             await I_PolyToken.connect(token_owner).approve(I_STRProxied.target, initRegFee);
-            console.log("Approving the STR for the registration fee");
             let tx = await I_STRProxied.connect(token_owner).registerNewTicker(token_owner.address, symbol);
-            console.log("Registering the ticker with the STR");
-            
-            // Wait for transaction and get receipt
+
             const receipt = await tx.wait();
-            const event = receipt.events?.find(e => e.event === 'NewTicker');
-            
-            expect(event.args._owner).to.equal(token_owner.address);
-            expect(event.args._ticker).to.equal(symbol.toUpperCase());
+            const fullReceipt = await ethers.provider.getTransactionReceipt(receipt.hash);
+        
+        const logs = fullReceipt.logs.filter(log => 
+            log.address.toLowerCase() === I_STRProxied.target.toLowerCase()
+        );
+        
+        let eventFound = false;
+        for (const log of logs) {
+            try {
+                const parsed = I_STRProxied.interface.parseLog(log);
+                
+                if (parsed.name === "RegisterTicker") { 
+                    expect(parsed.args._owner).to.equal(token_owner.address);
+                    expect(parsed.args._ticker).to.equal(symbol.toUpperCase());
+                    eventFound = true;
+                    break;
+                }
+            } catch (err) {
+                console.log(`Failed to parse log: ${err.message}`);
+            }
+        }
+        
+        expect(eventFound).to.be.true;
+        
         });
 
         it("Should generate the new security token with the same symbol as registered above", async () => {
             await I_PolyToken.connect(token_owner).approve(I_STRProxied.target, initRegFee);
+            console.log("Approving the STR for the registration fee");
             let tx = await I_STRProxied.connect(token_owner).generateNewSecurityToken(
                 name, 
                 symbol, 
                 tokenDetails, 
                 false, 
-                token_owner.address, 
+                token_owner, 
                 0
             );
+            console.log("Generating the new security token with the symbol:", tx);
 
             // Wait for transaction and get receipt
             const receipt = await tx.wait();

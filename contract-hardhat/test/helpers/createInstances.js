@@ -68,6 +68,10 @@ const MRProxyParameters = ["address", "address"];
 
 /// Function use to launch the polymath ecossystem.
 async function setUpPolymathNetwork(account_polymath, token_owner) {
+    const accounts = await ethers.getSigners();
+    if (accounts[0].address !== account_polymath) {
+        throw new Error("The first account must be the Polymath account");
+    }
     // ----------- POLYMATH NETWORK Configuration ------------
     // Step 1: Deploy the PolyToken and PolymathRegistry
     const a = await deployPolyRegistryAndPolyToken(account_polymath, token_owner);
@@ -126,9 +130,9 @@ async function addOracles(account_polymath) {
     
     const MockOracle = await ethers.getContractFactory("MockOracle");
     
-    I_USDOracle = await MockOracle.deploy(ethers.ZeroAddress, ethers.formatBytes32String("ETH"), ethers.formatBytes32String("USD"), USDETH);
+    I_USDOracle = await MockOracle.deploy(ethers.ZeroAddress, ethers.encodeBytes32String("ETH"), ethers.encodeBytes32String("USD"), USDETH);
     
-    I_POLYOracle = await MockOracle.deploy(I_PolyToken.target, ethers.formatBytes32String("POLY"), ethers.formatBytes32String("USD"), USDPOLY);
+    I_POLYOracle = await MockOracle.deploy(I_PolyToken.target, ethers.encodeBytes32String("POLY"), ethers.encodeBytes32String("USD"), USDPOLY);
     
     await I_PolymathRegistry.changeAddress("EthUsdOracle", I_USDOracle.target);
     await I_PolymathRegistry.changeAddress("PolyUsdOracle", I_POLYOracle.target);
@@ -152,33 +156,23 @@ async function deployPolyRegistryAndPolyToken(account_polymath, token_owner) {
 
 async function deployFeatureRegistry(account_polymath) {
     const FeatureRegistry = await ethers.getContractFactory("FeatureRegistry");
-    console.log("Deploying FeatureRegistry...", FeatureRegistry);
     I_FeatureRegistry = await FeatureRegistry.deploy(I_PolymathRegistry.target);
-    console.log("FeatureRegistry deployed at:", I_FeatureRegistry.target);
 
     return [I_FeatureRegistry];
 }
 
 async function deployModuleRegistry(account_polymath) {
-    console.log("Deploying ModuleRegistry...");
     const ModuleRegistry = await ethers.getContractFactory("ModuleRegistry");
     I_ModuleRegistry = await ModuleRegistry.deploy();
-    console.log("Deploying ModuleRegistry...", I_ModuleRegistry);
 
     // Step 3 (b): Deploy the proxy and attach the implementation contract to it
-    console.log("Deploying ModuleRegistryProxy...");
     const ModuleRegistryProxy = await ethers.getContractFactory("ModuleRegistryProxy");
     I_ModuleRegistryProxy = await ModuleRegistryProxy.deploy();
-    console.log("ModuleRegistryProxy deployed at:", I_ModuleRegistryProxy.target);
-
-    console.log("Preparing to upgrade ModuleRegistryProxy with ModuleRegistry implementation...");
     const bytesMRProxy = encodeProxyCall(MRProxyParameters, [I_PolymathRegistry.target, account_polymath]);
-    await I_ModuleRegistryProxy.upgradeToAndCall("1.0.0", I_ModuleRegistry.target, bytesMRProxy);
-    console.log("ModuleRegistryProxy upgraded with ModuleRegistry implementation", bytesMRProxy);
+    const tx = await I_ModuleRegistryProxy.upgradeToAndCall("1.0.0", I_ModuleRegistry.target, bytesMRProxy);
+    console.log(tx, "tx hash for ModuleRegistryProxy upgrade");
     
-    console.log("Attaching ModuleRegistryProxy to ModuleRegistry...");
     I_MRProxied = await ethers.getContractAt("ModuleRegistry", I_ModuleRegistryProxy.target);
-    console.log("ModuleRegistryProxy attached to ModuleRegistry at:", I_MRProxied.target);
 
     return [I_ModuleRegistry, I_ModuleRegistryProxy, I_MRProxied];
 }
@@ -226,13 +220,22 @@ async function deploySTFactory(account_polymath) {
         });
     I_STGetter = await STGetter.deploy();
 
+    const STGetterMock = await ethers.getContractFactory("MockSTGetter", {
+        libraries: {
+            TokenLib: await tokenLib.getAddress(),
+        },
+        });
+    I_STGetter = await STGetterMock.deploy();
+    console.log("STGetter - " + I_STGetter.target);
+    console.log("MockSTGetter - " + STGetterMock.target);
+
     const SecurityTokenLogic = await ethers.getContractFactory("SecurityToken", {
         libraries: {
             TokenLib: await tokenLib.getAddress(),
         },
         });
-    I_SecurityToken = await SecurityTokenLogic.deploy();
 
+    I_SecurityToken = await SecurityTokenLogic.deploy();
     console.log("STL - " + I_SecurityToken.target);
 
     const DataStoreLogic = await ethers.getContractFactory("DataStore");
@@ -253,7 +256,7 @@ async function deploySTFactory(account_polymath) {
     };
     
     const tokenInitBytesCall = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["address"],
+        [tokenInitBytes.inputs[0].type],
         [I_STGetter.target]
     );
 
