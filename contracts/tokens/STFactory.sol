@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IModuleRegistry.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../datastore/DataStoreFactory.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Proxy for deploying SecurityToken instances
@@ -88,7 +89,8 @@ contract STFactory is ISTFactory, Ownable {
             _divisible
         );
         //NB When dataStore is generated, the security token address is automatically set via the constructor in DataStoreProxy.
-        if (address(dataStoreFactory) != address(0)) {
+        console.log("owner", dataStoreFactory.generateDataStore(securityToken), securityToken);
+        if (address(dataStoreFactory) != address(0)) { // failing here - due to 'Not Owner'
             ISecurityToken(securityToken).changeDataStore(dataStoreFactory.generateDataStore(securityToken));
         }
         ISecurityToken(securityToken).changeTreasuryWallet(_treasuryWallet);
@@ -100,10 +102,10 @@ contract STFactory is ISTFactory, Ownable {
     }
 
     function _deploy(
-        string memory _name,
-        string memory _symbol,
+        string calldata _name,
+        string calldata _symbol,
         uint8 _decimals,
-        string memory _tokenDetails,
+        string calldata _tokenDetails,
         bool _divisible
     ) internal returns(address) {
         // Creates proxy contract and sets some initial storage
@@ -115,6 +117,7 @@ contract STFactory is ISTFactory, Ownable {
             _tokenDetails,
             address(polymathRegistry)
         );
+        console.log("Deploying SecurityTokenProxy", logicContracts[latestUpgrade].version, logicContracts[latestUpgrade].logicContract);
         // Sets logic contract
         proxy.upgradeTo(logicContracts[latestUpgrade].version, logicContracts[latestUpgrade].logicContract);
         // Initialises security token contract - needed for functions that can only be called by the

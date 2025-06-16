@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import "../proxy/OwnedUpgradeabilityProxy.sol";
 import "./OZStorage.sol";
 import "./SecurityTokenStorage.sol";
+import "hardhat/console.sol";
 
 /**
  * @title USDTiered STO module Proxy
@@ -36,7 +37,8 @@ contract SecurityTokenProxy is OZStorage, SecurityTokenStorage, OwnedUpgradeabil
         polymathRegistry = IPolymathRegistry(_polymathRegistry);
         tokenDetails = _tokenDetails;
         granularity = _granularity;
-        _owner = msg.sender;
+        owner_ = msg.sender;
+        console.log(owner_, " is the owner of the SecurityTokenProxy");
     }
 
 }

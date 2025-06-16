@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import "./UpgradeabilityProxy.sol";
+import "hardhat/console.sol";
 
 /**
  * @title OwnedUpgradeabilityProxy

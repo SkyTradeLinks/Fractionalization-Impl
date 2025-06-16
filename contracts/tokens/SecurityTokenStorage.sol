@@ -58,11 +58,10 @@ contract SecurityTokenStorage {
     }
 
     //Naming scheme to match Ownable
-    address internal _owner;
+    address internal owner_;
     address public tokenFactory;
     bool public initialized;
 
-    // ERC20 Details - FIXED WITH 0.8.30 Upgrade
     string internal name_;
     string internal symbol_;
     uint8 internal decimals_;
