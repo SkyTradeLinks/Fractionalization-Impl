@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT 
+pragma solidity 0.8.30;
 /**
     //
         IMPORTANT: Developer should update the ISecurityTokenRegistry.sol (Interface) if there is any change in
@@ -6,8 +8,6 @@
 
  */
 
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IOwnable.sol";
@@ -219,9 +219,14 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
     /////////////////////////////
 
     // Constructor
-    constructor() public {
+    constructor() {
         set(INITIALIZE, true);
     }
+
+    /**
+     * @notice Receive function to accept ETH
+     */
+    receive() external payable {}
 
     /**
      * @notice Initializes instance of STR
@@ -321,7 +326,7 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         set(STRGETTER, _getterContract);
     }
 
-    function _implementation() internal override view returns(address) {
+    function _implementation() internal view override returns(address) {
         return getAddressValue(STRGETTER);
     }
 

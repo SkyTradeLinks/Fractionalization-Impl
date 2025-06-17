@@ -7,7 +7,7 @@ import "./interfaces/IFeatureRegistry.sol";
 /**
  * @title Registry for managing polymath feature switches
  */
-abstract contract FeatureRegistry is IFeatureRegistry, ReclaimTokens {
+contract FeatureRegistry is IFeatureRegistry, ReclaimTokens {
     mapping(bytes32 => bool) public featureStatus;
 
     /**
@@ -19,6 +19,8 @@ abstract contract FeatureRegistry is IFeatureRegistry, ReclaimTokens {
         bytes32 key = keccak256(bytes(_nameKey));
         return featureStatus[key];
     }
+
+    constructor(address intitialOwner) ReclaimTokens(intitialOwner) {}
 
     /**
      * @notice change a feature status

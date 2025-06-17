@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT 
 pragma solidity 0.8.30;
 
 import "../proxy/Proxy.sol";
@@ -23,11 +23,29 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
  * @notice - Implements the ERC1400 Interface
  * @notice - Transfers are restricted
  * @notice - Modules can be attached to it to control its behaviour
- * @notice - ST should not be deployed directly, but rather the SecurityTokenRegistry should be used
  * @notice - ST does not inherit from ISecurityToken due to:
  * @notice - https://github.com/ethereum/solidity/issues/4847
  */
 contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594, IERC1643, IERC1644, IERC1410, Proxy {
+    
+    // Add a receive function to handle direct ETH transfers
+    receive() external payable {
+        // Delegate to fallback
+        _fallback();
+    }
+
+    // Override ERC20 functions to avoid naming conflicts with SecurityTokenStorage variables
+    function name() public view virtual override returns (string memory) {
+        return name_;
+    }
+
+    function symbol() public view virtual override returns (string memory) {
+        return symbol_;
+    }
+
+    function decimals() public view virtual override returns (uint8) {
+        return decimals_;
+    }
 
     // Emit at the time when module get added
     event ModuleAdded(
@@ -69,26 +87,9 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     // Emit when Module get removed from the securityToken
     event ModuleRemoved(uint8[] _types, address _module); //Event emitted by the tokenLib.
     // Emit when the budget allocated to a module is changed
-    event ModuleBudgetChanged(uint8[] _moduleTypes, address _module, uint256 _oldBudget, uint256 _budget); //Event emitted by the tokenLib.
-
     // Constructor
     constructor() ERC20("", "") {
         initialized = true;
-    }
-
-    receive() external payable {}
-
-    // Override functions for ERC20 (FIX: 0.8.30 Upgrade)
-    function name() public view override returns (string memory) {
-        return name_;
-    }
-
-    function symbol() public view override returns (string memory) {
-        return symbol_;
-    }
-
-    function decimals() public view override returns (uint8) {
-        return decimals_;
     }
 
     /**
@@ -96,7 +97,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      * @dev Expected to be called atomically with the proxy being created, by the owner of the token
      * @dev Can only be called once
      */
-    function initialize(address _getterDelegate) public {
+    function initialize(address _getterDelegate) public virtual {
         //Expected to be called atomically with the proxy being created
         require(!initialized, "Already initialized");
         getterDelegate = _getterDelegate;
@@ -125,7 +126,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     // Require msg.sender to be the specified module type or the owner of the token
     function _onlyModuleOrOwner(uint8 _type) internal view {
         if (msg.sender != owner())
-            require(isModule(msg.sender, _type), "Not module or owner");
+            require(isModule(msg.sender, _type));
     }
 
     function _isValidPartition(bytes32 _partition) internal pure {
@@ -172,14 +173,14 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      * @dev using the internal function instead of modifier to save the code size
      */
     function _onlyOwner() internal view {
-        require(isOwner(), "Not owner");
+        require(isOwner());
     }
 
     /**
      * @dev Require msg.sender to be the specified module type
      */
     function _onlyModule(uint8 _type) internal view {
-        require(isModule(msg.sender, _type), "Not module");
+        require(isModule(msg.sender, _type));
     }
 
     modifier checkGranularity(uint256 _value) {
@@ -320,7 +321,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     function withdrawERC20(address _tokenContract, uint256 _value) external {
         _onlyOwner();
         IERC20 token = IERC20(_tokenContract);
-        require(token.transfer(owner(), _value), "Transfer failed");
+        require(token.transfer(owner(), _value));
     }
 
     /**
@@ -371,9 +372,9 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     */
     function changeName(string calldata _name) external {
         _onlyOwner();
-        require(bytes(_name).length > 0, "Empty name");
+        require(bytes(_name).length > 0);
         emit UpdateTokenName(name_, _name);
-        name_ = _name;
+        name_ = name_;
     }
 
     /**
@@ -402,7 +403,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      */
     function freezeTransfers() external {
         _onlyOwner();
-        require(!transfersFrozen, "Already frozen");
+        require(!transfersFrozen);
         transfersFrozen = true;
         /*solium-disable-next-line security/no-block-members*/
         emit FreezeTransfers(true);
@@ -413,7 +414,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      */
     function unfreezeTransfers() external {
         _onlyOwner();
-        require(transfersFrozen, "Not frozen");
+        require(transfersFrozen);
         transfersFrozen = false;
         /*solium-disable-next-line security/no-block-members*/
         emit FreezeTransfers(false);
@@ -486,7 +487,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      */
     function transferFromWithData(address _from, address _to, uint256 _value, bytes memory _data) public {
         _isValidTransfer(_updateTransfer(_from, _to, _value, _data));
-        super.transferFrom(_from, _to, _value);
+        require(super.transferFrom(_from, _to, _value));
     }
 
     /**
@@ -557,7 +558,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     function _returnPartition(uint256 _beforeBalance, uint256 _afterBalance, uint256 _value) internal pure returns(bytes32 toPartition) {
         // return LOCKED only when the transaction `_value` should be equal to the change in the LOCKED partition
         // balance otherwise return UNLOCKED
-        toPartition = _afterBalance - _beforeBalance == _value ? LOCKED : UNLOCKED; // Returning the same partition UNLOCKED
+        toPartition = _afterBalance - (_beforeBalance) == _value ? LOCKED : UNLOCKED; // Returning the same partition UNLOCKED
     }
 
     ///////////////////////
@@ -633,7 +634,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     {
         // For the current release we are only allowing UNLOCKED partition tokens to transact
         _validateOperatorAndPartition(_partition, _from, msg.sender);
-        require(_operatorData[0] != 0, "Empty operator data");
+        require(_operatorData[0] != 0);
         return _transferByPartition(_from, _to, _value, _partition, _data, msg.sender, _operatorData);
     }
 
@@ -768,7 +769,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
         _isIssuanceAllowed();
         _onlyModuleOrOwner(MINT_KEY);
         // Remove reason string to reduce the code size
-        require(_tokenHolders.length == _values.length, "Length mismatch");
+        require(_tokenHolders.length == _values.length);
         for (uint256 i = 0; i < _tokenHolders.length; i++) {
             _issue(_tokenHolders[i], _values[i], "");
         }
@@ -920,12 +921,12 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
 
     /**
      * @notice Transfers of securities may fail for a number of reasons. So this function will used to understand the
-     * cause of failure by getting the byte value. Which will be the ESC that follows the EIP 1066. ESC can be mapped
+     * cause of failure by getting the bytes1 value. Which will be the ESC that follows the EIP 1066. ESC can be mapped
      * with a reson string to understand the failure cause, table of Ethereum status code will always reside off-chain
      * @param _to address The address which you want to transfer to
      * @param _value uint256 the amount of tokens to be transferred
      * @param _data The `bytes _data` allows arbitrary data to be submitted alongside the transfer.
-     * byte Ethereum status code (ESC)
+     * bytes1 Ethereum status code (ESC)
      * bytes32 Application specific reason code
      */
     function canTransfer(address _to, uint256 _value, bytes calldata _data) external view returns (bytes1, bytes32) {
@@ -934,12 +935,14 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
 
     /**
      * @notice Transfers of securities may fail for a number of reasons. So this function will used to understand the
-     * cause of failure by getting the byte value. Which will be the ESC that follows the EIP 1066. ESC can be mapped
+     * cause of failure by getting the bytes1 value. Which will be the ESC that follows the EIP 1066. ESC can be mapped
      * with a reson string to understand the failure cause, table of Ethereum status code will always reside off-chain
      * @param _from address The address which you want to send tokens from
      * @param _to address The address which you want to transfer to
      * @param _value uint256 the amount of tokens to be transferred
      * @param _data The `bytes _data` allows arbitrary data to be submitted alongside the transfer.
+     * bytes1 Ethereum status code (ESC)
+     * bytes32 Application specific reason code
      */
     function canTransferFrom(address _from, address _to, uint256 _value, bytes calldata _data) external view returns (bytes1 reasonCode, bytes32 appCode) {
         (reasonCode, appCode) = _canTransfer(_from, _to, _value, _data);
@@ -966,6 +969,9 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
      * @param _partition The partition from which to transfer tokens
      * @param _value The amount of tokens to transfer from `_partition`
      * @param _data Additional data attached to the transfer of tokens
+     * ESC (Ethereum Status Code) following the EIP-1066 standard
+     * Application specific reason codes with additional details
+     * The partition to which the transferred tokens were allocated for the _to address
      */
     function canTransferByPartition(
         address _from,
@@ -1061,7 +1067,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
         emit ControllerRedemption(msg.sender, _tokenHolder, _value, _data, _operatorData);
     }
 
-    function _implementation() internal override view returns(address) {
+    function _implementation() internal view override returns(address) {
         return getterDelegate;
     }
 

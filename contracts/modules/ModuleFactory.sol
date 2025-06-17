@@ -51,14 +51,14 @@ abstract contract ModuleFactory is IModuleFactory, Ownable {
     /**
      * @notice Type of the Module factory
      */
-    function getTypes() external view returns(uint8[] memory) {
+    function getTypes() external view virtual returns(uint8[] memory) {
         return typesData;
     }
 
     /**
      * @notice Get the tags related to the module factory
      */
-    function getTags() external view returns(bytes32[] memory) {
+    function getTags() external view virtual returns(bytes32[] memory) {
         return tagsData;
     }
 
