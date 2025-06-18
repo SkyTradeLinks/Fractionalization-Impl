@@ -208,7 +208,7 @@ async function deploySTFactory(account_polymath) {
 
     const STGetter = await ethers.getContractFactory("STGetter", {
         libraries: {
-            TokenLib: tokenLib.target,
+          TokenLib: tokenLib.target,
         },
         });
     I_STGetter = await STGetter.deploy();
@@ -240,37 +240,40 @@ async function deploySTFactory(account_polymath) {
         ]
     };
 
-    //  let iface = new ethers.Interface([tokenInitBytes]);
-    //  const tokenInitBytesCall = iface.encodeFunctionData("initialize", [I_STGetter.target]);
-    // const tokenInitBytesCall = ethers.AbiCoder.defaultAbiCoder().encode(
-    //     ["address"],
-    //     [I_STGetter.target]
-    // );
+    const tokenInitBytesCall = web3.eth.abi.encodeFunctionCall(tokenInitBytes, [I_STGetter.target]);    
 
-  const deployer = await ethers.getSigner(process.env.OWNER_ADDRESS);
-
-      let tokenInitBytesCall = web3.eth.abi.encodeFunctionCall(tokenInitBytes, [I_STGetter.target]);
-  console.log({tokenInitBytesCall})
-    console.log(tokenInitBytesCall)
-    console.log("tokenInitBytesCall", tokenInitBytesCall);
-  console.log(I_PolymathRegistry.target, I_GeneralTransferManagerFactory.target, I_DataStoreFactory.target, "3.0.0", I_SecurityToken.target, tokenInitBytesCall, deployer, "params")
-
-      const STFactory = await ethers.getContractFactory(
-    "STFactory",
-    [
+    const STFactoryFactory = await ethers.getContractFactory(
+      "STFactory"
+    );
+    
+    // Deploy with constructor arguments
+    const STFactory = await STFactoryFactory.deploy(
       I_PolymathRegistry.target,
       I_GeneralTransferManagerFactory.target,
       I_DataStoreFactory.target,
       "3.0.0",
       I_SecurityToken.target,
-      tokenInitBytesCall,
-    ],
-    deployer,
-  );
-  await STFactory.deploy();
-  const STFactoryContractAddress = await STFactory.getAddress();
-  console.log({STFactoryContractAddress})
-    console.log("STFactory - " + I_STFactory.target);
+      tokenInitBytesCall
+    );
+
+    console.log("STFactory - " + STFactory.target);
+
+  // const STFactory = await ethers.getContractFactory(
+  //   "STFactory",
+  //   [
+  //     I_PolymathRegistry.target,
+  //     I_GeneralTransferManagerFactory.target,
+  //     I_DataStoreFactory.target,
+  //     "3.0.0",
+  //     I_SecurityToken.target,
+  //     tokenInitBytesCall,
+  //   ],
+  //   deployer,
+  // );
+  // await STFactory.deploy();
+  // const STFactoryContractAddress = await STFactory.getAddress();
+  // console.log({STFactoryContractAddress})
+  // console.log("STFactory - " + STFactoryContractAddress);
 
 //       const STFactory = await ethers.getContractFactory(
 //     "STFactory",
@@ -290,11 +293,11 @@ async function deploySTFactory(account_polymath) {
 //   );
 //   await STFactory.deploy();
 
-    if (I_STFactory.target === ethers.ZeroAddress) {
-        throw new Error("STFactory contract was not deployed");
-    }
+    // if (I_STFactory.target === ethers.ZeroAddress) {
+    //     throw new Error("STFactory contract was not deployed");
+    // }
 
-    return [I_STFactory, I_STGetter];
+    // return [I_STFactory, I_STGetter];
 }
 
 async function deploySTR(account_polymath) {
