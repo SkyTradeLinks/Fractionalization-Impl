@@ -58,7 +58,7 @@ const config: HardhatUserConfig = {
     }
   }, 
   solidity: {
-    version: '0.5.8',
+    version: '0.8.30',
     settings: {
       optimizer: {
         enabled: true,
