@@ -7,10 +7,11 @@ import "../interfaces/ISTFactory.sol";
 import "../interfaces/ISecurityToken.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../interfaces/IOwnable.sol";
-import "../libraries/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IModuleRegistry.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../datastore/DataStoreFactory.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Proxy for deploying SecurityToken instances
@@ -46,21 +47,22 @@ contract STFactory is ISTFactory, Ownable {
         address _logicContract,
         bytes memory _initializationData
     )
+    Ownable(msg.sender)
     {
         require(_logicContract != address(0), "Invalid Address");
         require(_transferManagerFactory != address(0), "Invalid Address");
         require(_dataStoreFactory != address(0), "Invalid Address");
         require(_polymathRegistry != address(0), "Invalid Address");
         require(_initializationData.length > 4, "Invalid Initialization");
-        // transferManagerFactory = _transferManagerFactory;
-        // dataStoreFactory = DataStoreFactory(_dataStoreFactory);
-        // polymathRegistry = IPolymathRegistry(_polymathRegistry);
+        transferManagerFactory = _transferManagerFactory;
+        dataStoreFactory = DataStoreFactory(_dataStoreFactory);
+        polymathRegistry = IPolymathRegistry(_polymathRegistry);
 
-        // // Start at 1 so that we can distinguish deployed tokens in tokenUpgrade
-        // latestUpgrade = 1;
-        // logicContracts[latestUpgrade].logicContract = _logicContract;
-        // logicContracts[latestUpgrade].initializationData = _initializationData;
-        // logicContracts[latestUpgrade].version = _version;
+        // Start at 1 so that we can distinguish deployed tokens in tokenUpgrade
+        latestUpgrade = 1;
+        logicContracts[latestUpgrade].logicContract = _logicContract;
+        logicContracts[latestUpgrade].initializationData = _initializationData;
+        logicContracts[latestUpgrade].version = _version;
     }
 
     /**
@@ -87,9 +89,11 @@ contract STFactory is ISTFactory, Ownable {
             _divisible
         );
         //NB When dataStore is generated, the security token address is automatically set via the constructor in DataStoreProxy.
+        // console.log(securityToken, ISecurityToken(securityToken).decimals(), "securityToken address and owner 3");
         if (address(dataStoreFactory) != address(0)) {
-            ISecurityToken(securityToken).changeDataStore(dataStoreFactory.generateDataStore(securityToken));
+           ISecurityToken(securityToken).changeDataStore(dataStoreFactory.generateDataStore(securityToken));
         }
+        console.log(transferManagerFactory, "transferManagerFactory address");
         ISecurityToken(securityToken).changeTreasuryWallet(_treasuryWallet);
         if (transferManagerFactory != address(0)) {
             ISecurityToken(securityToken).addModule(transferManagerFactory, "", 0, 0, false);
@@ -99,10 +103,10 @@ contract STFactory is ISTFactory, Ownable {
     }
 
     function _deploy(
-        string memory _name,
-        string memory _symbol,
+        string calldata _name,
+        string calldata _symbol,
         uint8 _decimals,
-        string memory _tokenDetails,
+        string calldata _tokenDetails,
         bool _divisible
     ) internal returns(address) {
         // Creates proxy contract and sets some initial storage
@@ -115,11 +119,51 @@ contract STFactory is ISTFactory, Ownable {
             address(polymathRegistry)
         );
         // Sets logic contract
-        proxy.upgradeTo(logicContracts[latestUpgrade].version, logicContracts[latestUpgrade].logicContract);
-        // Initialises security token contract - needed for functions that can only be called by the
-        // owner of the contract, or are specific to this particular logic contract (e.g. setting version)
-        (bool success, ) = address(proxy).call(logicContracts[latestUpgrade].initializationData);
-        require(success, "Unsuccessful initialization");
+        // OwnedUpgradeabilityProxy(payable(address(proxy))).transferProxyOwnership(address(this));
+        OwnedUpgradeabilityProxy(payable(address(proxy))).transferProxyOwnership(msg.sender);
+        OwnedUpgradeabilityProxy(payable(address(proxy))).transferProxyOwnership(address(this));
+        console.log("initializing proxy with logic contract:", logicContracts[latestUpgrade].logicContract);
+        console.logBytes(logicContracts[latestUpgrade].initializationData);
+        // OwnedUpgradeabilityProxy(payable(address(proxy))).upgradeToAndCall(
+        //     logicContracts[latestUpgrade].version,
+        //     logicContracts[latestUpgrade].logicContract,
+        //     logicContracts[latestUpgrade].initializationData
+        // );
+    proxy.upgradeTo(logicContracts[latestUpgrade].version, logicContracts[latestUpgrade].logicContract);
+    
+    // console.log("Proxy owner:", proxy.proxyOwner());
+    // console.log("address(this):", address(this));
+    // console.log("Msg.sender:", msg.sender);
+    // console.logBytes(logicContracts[latestUpgrade].initializationData);
+    
+    // // Get the revert reason
+    (bool success, bytes memory returnData) = address(proxy).call(logicContracts[latestUpgrade].initializationData);
+    console.log(success, "success of initialization call");
+    
+    if (!success) {
+        console.log("Initialization failed!");
+        console.logBytes(returnData);
+        
+        // Try to decode the error message
+        if (returnData.length > 0) {
+            assembly {
+                let returndata_size := mload(returnData)
+                revert(add(32, returnData), returndata_size)
+            }
+        } else {
+            revert("Initialization failed with no error message");
+        }
+    }
+        console.log("Proxy initialized successfully");
+        // console.log("Proxy owner after init:", proxy.proxyOwner());
+        // console.log("Address(this) after init:", address(this));
+        console.log("Msg.sender after init:", msg.sender);
+        // console.log("Logic contract address after init:", logicContracts[latestUpgrade].logicContract);
+        // console.logBytes(logicContracts[latestUpgrade].initializationData);
+        // console.log("Proxy address:", address(proxy));
+        // console.log("Proxy owner after init:", proxy.owner());
+    
+    // console.log("Storage owner after init:", ISecurityToken(address(proxy)).owner());
         tokenUpgrade[address(proxy)] = latestUpgrade;
         return address(proxy);
     }

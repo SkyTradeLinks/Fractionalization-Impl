@@ -1,7 +1,6 @@
 const { ethers } = require("hardhat");
 const { encodeProxyCall } = require("./encodeCall");
 const Web3 = require("web3");
-const web3 = new Web3(new Web3.providers.HttpProvider(process.env.PROVIDER_URL));
 
 // Contract Instance Declaration
 let I_USDTieredSTOProxyFactory;
@@ -135,7 +134,7 @@ async function addOracles(account_polymath) {
 async function deployPolyRegistryAndPolyToken(account_polymath, token_owner) {
     // Step 0: Deploy the PolymathRegistry
     const PolymathRegistry = await ethers.getContractFactory("PolymathRegistry");
-    I_PolymathRegistry = await PolymathRegistry.deploy();
+    I_PolymathRegistry = await PolymathRegistry.deploy(account_polymath);
 
     // Step 1: Deploy the token Faucet and Mint tokens for token_owner
     const PolyTokenFaucet = await ethers.getContractFactory("PolyTokenFaucet");
@@ -149,7 +148,7 @@ async function deployPolyRegistryAndPolyToken(account_polymath, token_owner) {
 
 async function deployFeatureRegistry(account_polymath) {
     const FeatureRegistry = await ethers.getContractFactory("FeatureRegistry");
-    I_FeatureRegistry = await FeatureRegistry.deploy();
+    I_FeatureRegistry = await FeatureRegistry.deploy(I_PolymathRegistry.target);
 
     return [I_FeatureRegistry];
 }
@@ -206,12 +205,12 @@ async function deploySTFactory(account_polymath) {
         await tokenLib.waitForDeployment();
         console.log(tokenLib.target, "tokenLib");
 
-    const STGetter = await ethers.getContractFactory("STGetter", {
+    const STGetterFactory = await ethers.getContractFactory("STGetter", {
         libraries: {
-          TokenLib: tokenLib.target,
+            TokenLib: tokenLib.target,
         },
         });
-    I_STGetter = await STGetter.deploy();
+    I_STGetter = await STGetterFactory.deploy();
     console.log("STGetter - " + I_STGetter.target);
 
     const SecurityTokenLogic = await ethers.getContractFactory("SecurityToken", {
@@ -240,40 +239,32 @@ async function deploySTFactory(account_polymath) {
         ]
     };
 
-    const tokenInitBytesCall = web3.eth.abi.encodeFunctionCall(tokenInitBytes, [I_STGetter.target]);    
+    //  let iface = new ethers.Interface([tokenInitBytes]);
+    //  const tokenInitBytesCall = iface.encodeFunctionData("initialize", [I_STGetter.target]);
+    // const tokenInitBytesCall = ethers.AbiCoder.defaultAbiCoder().encode(
+    //     ["address"],
+    //     [I_STGetter.target]
+    // );
 
-    const STFactoryFactory = await ethers.getContractFactory(
-      "STFactory"
+    // let tokenInitBytesCall = Web3.eth.abi.encodeFunctionCall(tokenInitBytes, [I_STGetter.target]);
+    // console.log("tokenInitBytesCall", tokenInitBytesCall);
+
+    const abiCoder = new ethers.Interface([
+        "function initialize(address _getterDelegate)"
+    ]);
+
+    const tokenInitBytesCall = abiCoder.encodeFunctionData("initialize", [I_STGetter.target]);
+
+    const STFactory = await ethers.getContractFactory("STFactory");
+    I_STFactory = await STFactory.deploy(
+        I_PolymathRegistry.target,
+        I_GeneralTransferManagerFactory.target,
+        I_DataStoreFactory.target,
+        "3.0.0",
+        I_SecurityToken.target,
+        tokenInitBytesCall
     );
-    
-    // Deploy with constructor arguments
-    const STFactory = await STFactoryFactory.deploy(
-      I_PolymathRegistry.target,
-      I_GeneralTransferManagerFactory.target,
-      I_DataStoreFactory.target,
-      "3.0.0",
-      I_SecurityToken.target,
-      tokenInitBytesCall
-    );
-
-    console.log("STFactory - " + STFactory.target);
-
-  // const STFactory = await ethers.getContractFactory(
-  //   "STFactory",
-  //   [
-  //     I_PolymathRegistry.target,
-  //     I_GeneralTransferManagerFactory.target,
-  //     I_DataStoreFactory.target,
-  //     "3.0.0",
-  //     I_SecurityToken.target,
-  //     tokenInitBytesCall,
-  //   ],
-  //   deployer,
-  // );
-  // await STFactory.deploy();
-  // const STFactoryContractAddress = await STFactory.getAddress();
-  // console.log({STFactoryContractAddress})
-  // console.log("STFactory - " + STFactoryContractAddress);
+    console.log("STFactory - " + I_STFactory.target);
 
 //       const STFactory = await ethers.getContractFactory(
 //     "STFactory",
@@ -293,11 +284,11 @@ async function deploySTFactory(account_polymath) {
 //   );
 //   await STFactory.deploy();
 
-    // if (I_STFactory.target === ethers.ZeroAddress) {
-    //     throw new Error("STFactory contract was not deployed");
-    // }
+    if (I_STFactory.target === ethers.ZeroAddress) {
+        throw new Error("STFactory contract was not deployed");
+    }
 
-    // return [I_STFactory, I_STGetter];
+    return [I_STFactory, I_STGetter, STGetterFactory];
 }
 
 async function deploySTR(account_polymath) {

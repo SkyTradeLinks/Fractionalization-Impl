@@ -5,6 +5,7 @@ import "./OZStorage.sol";
 import "./SecurityTokenStorage.sol";
 import "../libraries/TokenLib.sol";
 import "../modules/PermissionManager/IPermissionManager.sol";
+import "hardhat/console.sol";
 
 contract STGetter is OZStorage, SecurityTokenStorage {
 
@@ -135,6 +136,8 @@ contract STGetter is OZStorage, SecurityTokenStorage {
      * @return address[] list of modules with this type
      */
     function getModulesByType(uint8 _type) external view returns(address[] memory) {
+        console.log("getModulesByType called with type:", _type);
+        console.log(modules[_type].length, "some modules");
         return modules[_type];
     }
 

@@ -6,6 +6,7 @@ import "../../../libraries/Encoder.sol";
 import "../../../libraries/VersionUtils.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./GeneralTransferManagerStorage.sol";
+import "../../../external/TradingRestrictionManager/ITradingRestrictionManager.sol";
 
 /**
  * @title Transfer Manager module for core transfer validation functionality
@@ -577,17 +578,17 @@ contract GeneralTransferManager is GeneralTransferManagerStorage, TransferManage
         uint8 added
     )
     {
-        uint256 data = dataStore.getUint256(_getKey(WHITELIST, _investor));
-        (canSendAfter, canReceiveAfter, expiryTime, added)  = VersionUtils.unpackKYC(data);
-        // (canSendAfter, canReceiveAfter, expiryTime, added) = restrictionManager.getInvestorKYCData(_investor, address(securityToken));
+        // uint256 data = dataStore.getUint256(_getKey(WHITELIST, _investor));
+        // (canSendAfter, canReceiveAfter, expiryTime, added)  = VersionUtils.unpackKYC(data);
+        (canSendAfter, canReceiveAfter, expiryTime, added) = restrictionManager.getInvestorKYCData(_investor, address(securityToken));
     }
 
     function _isExistingInvestor(address _investor, IDataStore dataStore) internal view returns(bool) {
         uint256 data = dataStore.getUint256(_getKey(WHITELIST, _investor));
         //extracts `added` from packed `_whitelistData`
-        return uint8(data) == 0 ? false : true;
+        // return uint8(data) == 0 ? false : true;
 
-        // return restrictionManager.isExistingInvestor(_investor);
+        return restrictionManager.isExistingInvestor(_investor);
     }
 
     function _getValuesForTransfer(address _from, address _to) internal view returns(uint64 canSendAfter, uint64 fromExpiry, uint64 canReceiveAfter, uint64 toExpiry) {

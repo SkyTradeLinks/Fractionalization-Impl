@@ -23,6 +23,7 @@ contract EtherDividendCheckpointFactory is UpgradableModuleFactory {
         bool _isCostInPoly
     )
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
+        Ownable(msg.sender)
     {
         name = "EtherDividendCheckpoint";
         title = "Ether Dividend Checkpoint";

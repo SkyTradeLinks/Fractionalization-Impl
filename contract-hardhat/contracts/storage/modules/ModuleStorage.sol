@@ -8,7 +8,7 @@ import "../../external/TradingRestrictionManager/ITradingRestrictionManager.sol"
  * @title Storage for Module contract
  * @notice Contract is abstract
  */
-contract ModuleStorage {
+abstract contract ModuleStorage {
     address public factory;
 
     ISecurityToken public securityToken;

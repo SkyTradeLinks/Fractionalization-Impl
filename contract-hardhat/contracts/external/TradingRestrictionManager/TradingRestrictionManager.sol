@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-// import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "./ITradingRestrictionManager.sol";
-import "../../libraries/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
     bytes32 private _root;
 
-    constructor() Ownable() {}
+    constructor() Ownable(msg.sender) {}
 
     mapping(address => bool) public isOperator;
     mapping(address => InvestorKYCData) private _kycData;
@@ -69,7 +69,7 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
         bytes32 firstHash = keccak256(abi.encode(investor, expiry, isAccredited));
         bytes32 leaf = keccak256(abi.encode(firstHash));
 
-        // require(MerkleProof.verify(proof, _root, leaf), "Invalid proof");
+        require(MerkleProof.verify(proof, _root, leaf), "Invalid proof");
 
         if (!_existingInvestors[investor]) {
             _existingInvestors[investor] = true;

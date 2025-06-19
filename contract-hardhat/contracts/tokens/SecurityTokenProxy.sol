@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import "../proxy/OwnedUpgradeabilityProxy.sol";
 import "./OZStorage.sol";
 import "./SecurityTokenStorage.sol";
+import "hardhat/console.sol";
 
 /**
  * @title USDTiered STO module Proxy

@@ -9,7 +9,7 @@ import "../interfaces/ISecurityToken.sol";
 import "../interfaces/ICheckPermission.sol";
 import "../storage/modules/ModuleStorage.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../libraries/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title Interface that any module contract should implement

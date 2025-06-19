@@ -23,6 +23,7 @@ contract GeneralTransferManagerFactory is UpgradableModuleFactory {
         bool _isCostInPoly
     )
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
+        Ownable(msg.sender)
     {
         name = "GeneralTransferManager";
         title = "General Transfer Manager";
