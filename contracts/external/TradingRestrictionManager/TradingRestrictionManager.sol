@@ -2,6 +2,7 @@
 pragma solidity 0.5.8;
 
 import "./ITradingRestrictionManager.sol";
+import "openzeppelin-solidity/contracts/cryptography/MerkleProof.sol";
 
 /**
  * @dev Replaces OpenZeppelin's Ownable for Solidity 0.5.8
@@ -28,6 +29,8 @@ contract Ownable {
 }
 
 contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
+    bytes32 private _root;
+
     mapping(address => bool) public isOperator;
     mapping(address => InvestorKYCData) private _kycData;
     mapping(address => bool) private _existingInvestors;
@@ -58,15 +61,45 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
         emit OperatorRoleRevoked(account);
     }
 
-    function modifyKYCData(
+    /**
+     * @notice Updates the Merkle root for investor KYC validation.
+     * @param root The new Merkle root hash
+     */
+    function modifyKYCData(bytes32 root) external onlyOperator {
+        _root = root;
+        emit MerkleRootUpdated(_root);
+    }
+
+    /**
+     * @notice Verifies an investor's KYC data using a Merkle proof and stores it.
+     * @param proof Array of hashes needed to prove membership in the Merkle tree
+     * @param investor Investor's wallet address
+     * @param expiry Expiry timestamp for KYC
+     * @param isAccredited Boolean flag indicating if the investor is accredited
+     * @param investorClass Boolean flag indicating if the investor is US or NON US
+     */
+    function verifyInvestor(
+        bytes32[] calldata proof,
         address investor,
-        uint64 expiryTime,
-        bool, // isAccredited unused
+        uint64 expiry,
+        bool isAccredited,
         InvestorClass investorClass
-    ) external onlyOperator {
-        _existingInvestors[investor] = true;
-        _kycData[investor] = InvestorKYCData(expiryTime, investorClass);
-        emit InvestorKYCDataUpdated(investor, expiryTime, investorClass);
+    ) external returns (bool) {
+        require(expiry > block.timestamp, "Investor proof has expired");
+
+        bytes32 firstHash = keccak256(abi.encode(investor, expiry, isAccredited));
+        bytes32 leaf = keccak256(abi.encode(firstHash));
+
+        require(MerkleProof.verify(proof, _root, leaf), "Invalid proof");
+
+        if (!_existingInvestors[investor]) {
+            _existingInvestors[investor] = true;
+        }
+
+        _kycData[investor] = InvestorKYCData(proof, expiry, investorClass);
+
+        emit InvestorKYCDataUpdated(investor, proof, expiry, isAccredited, investorClass);
+        return true;
     }
 
     function isExistingInvestor(address investor) external view returns (bool) {

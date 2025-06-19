@@ -5,12 +5,14 @@ interface ITradingRestrictionManager {
     enum InvestorClass { NonUS, US }
 
     struct InvestorKYCData {
+        bytes32[] proof;
         uint64 expiryTime;
         InvestorClass investorClass;
     }
 
-    event InvestorKYCDataUpdated(address indexed investor, uint64 expiryTime, InvestorClass investorClass);
+    event InvestorKYCDataUpdated(address indexed investor, bytes32[] proof, uint64 expiryTime, bool isAccredited, InvestorClass investorClass);
     event WhitelistOnlyTradingUpdated(address indexed token, bool status);
+    event MerkleRootUpdated(bytes32 root);
 
     function modifyKYCData(
         address investor,
@@ -18,6 +20,14 @@ interface ITradingRestrictionManager {
         bool isAccredited,
         InvestorClass investorClass
     ) external;
+
+    function verifyInvestor(
+        bytes32[] calldata proof,
+        address investor,
+        uint64 expiry,
+        bool isAccredited,
+        InvestorClass investorClass
+    ) external returns (bool);
 
     function setTradingRestrictionPeriod(
         address token,

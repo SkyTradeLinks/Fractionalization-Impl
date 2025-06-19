@@ -4,6 +4,9 @@ pragma solidity 0.5.8;
  * @title Interface that every module contract should implement
  */
 interface IModule {
+    // Emit when trading restriction manager address get changed
+    event TradingRestrictionManagerUpdated(address indexed newManager);
+
     /**
      * @notice This function returns the signature of configure function
      */

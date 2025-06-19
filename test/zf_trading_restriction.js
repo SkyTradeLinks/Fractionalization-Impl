@@ -5,7 +5,7 @@ const TradingRestrictionManager = artifacts.require("TradingRestrictionManager")
 contract("TradingRestrictionManager", (accounts) => {
   let contract;
   const [owner, operator1, operator2, investor1, investor2, investor3, token1, token2, nonOwner] = accounts;
-
+  let merkleTree, merkleRoot, proof1;
   // Constants for testing
   const INVESTOR_CLASS = {
     NonUS: 0,
@@ -115,6 +115,27 @@ contract("TradingRestrictionManager", (accounts) => {
   describe("KYC Data management", () => {
     beforeEach(async () => {
       await contract.grantOperator(operator1, { from: owner });
+    });
+
+    it("should verify investor with valid proof", async () => {
+      await contract.modifyKYCData(merkleRoot, { from: operator });
+  
+      const tx = await contract.verifyInvestor(
+        proof1,
+        investor1,
+        expiry,
+        isAccredited1,
+        { from: investor1 }
+      );
+  
+      truffleAssert.eventEmitted(tx, "InvestorKYCDataUpdate", (ev) =>
+        ev.investor === investor1 &&
+        ev.expiryTime.toString() === String(expiry) &&
+        ev.isAccredited === isAccredited1
+      );
+  
+      const result = await contract.isExistingInvestor(investor1);
+      assert.strictEqual(result, true);
     });
 
     it("should allow operator to modify KYC data", async () => {
