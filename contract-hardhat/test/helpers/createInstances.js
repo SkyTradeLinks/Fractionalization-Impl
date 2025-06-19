@@ -63,10 +63,25 @@ let I_WeightedVoteCheckpointLogic;
 let I_PLCRVotingCheckpointLogic;
 
 // Initial fee for ticker registry and security token registry
-const initRegFee = ethers.parseEther("250");
+const initRegFee = ethers.parseEther("0");
 
 const STRProxyParameters = ["address", "uint256", "uint256", "address", "address"];
 const MRProxyParameters = ["address", "address"];
+
+const functionSignatureProxyMR = {
+    name: "initialize",
+    type: "function",
+    inputs: [
+        {
+            type: "address",
+            name: "_polymathRegistry"
+        },
+        {
+            type: "address",
+            name: "_owner"
+        }
+    ]
+};
 
 /// Function use to launch the polymath ecossystem.
 async function setUpPolymathNetwork(account_polymath, token_owner) {
@@ -161,7 +176,8 @@ async function deployModuleRegistry(account_polymath) {
     // Step 3 (b): Deploy the proxy and attach the implementation contract to it
     const ModuleRegistryProxy = await ethers.getContractFactory("ModuleRegistryProxy");
     I_ModuleRegistryProxy = await ModuleRegistryProxy.deploy();
-    const bytesMRProxy = encodeProxyCall(MRProxyParameters, [I_PolymathRegistry.target, account_polymath]);
+
+    const bytesMRProxy = web3.eth.abi.encodeFunctionCall(functionSignatureProxyMR, [I_PolymathRegistry.target, account_polymath]);
     const tx = await I_ModuleRegistryProxy.upgradeToAndCall("1.0.0", I_ModuleRegistry.target, bytesMRProxy);
     
     I_MRProxied = await ethers.getContractAt("ModuleRegistry", I_ModuleRegistryProxy.target);
@@ -247,7 +263,7 @@ async function deploySTFactory(account_polymath) {
     );
     
     // Deploy with constructor arguments
-    const STFactory = await STFactoryFactory.deploy(
+    I_STFactory = await STFactoryFactory.deploy(
       I_PolymathRegistry.target,
       I_GeneralTransferManagerFactory.target,
       I_DataStoreFactory.target,
@@ -256,48 +272,9 @@ async function deploySTFactory(account_polymath) {
       tokenInitBytesCall
     );
 
-    console.log("STFactory - " + STFactory.target);
+    console.log("STFactory - " + I_STFactory.target);
 
-  // const STFactory = await ethers.getContractFactory(
-  //   "STFactory",
-  //   [
-  //     I_PolymathRegistry.target,
-  //     I_GeneralTransferManagerFactory.target,
-  //     I_DataStoreFactory.target,
-  //     "3.0.0",
-  //     I_SecurityToken.target,
-  //     tokenInitBytesCall,
-  //   ],
-  //   deployer,
-  // );
-  // await STFactory.deploy();
-  // const STFactoryContractAddress = await STFactory.getAddress();
-  // console.log({STFactoryContractAddress})
-  // console.log("STFactory - " + STFactoryContractAddress);
-
-//       const STFactory = await ethers.getContractFactory(
-//     "STFactory",
-//     {
-//       I_PolymathRegistry.target,
-//       I_GeneralTransferManagerFactory.target,
-//       I_DataStoreFactory.target,
-//       "3.0.0",
-//       I_SecurityToken.target,
-//       tokenInitBytesCall
-//     },
-//     {
-//       libraries: {
-//         TokenLib: tokenLib.target,
-//       }
-//     }
-//   );
-//   await STFactory.deploy();
-
-    // if (I_STFactory.target === ethers.ZeroAddress) {
-    //     throw new Error("STFactory contract was not deployed");
-    // }
-
-    // return [I_STFactory, I_STGetter];
+    return [I_STFactory, I_STGetter];
 }
 
 async function deploySTR(account_polymath) {
@@ -315,13 +292,40 @@ async function deploySTR(account_polymath) {
     const STRGetter = await ethers.getContractFactory("STRGetter");
     I_STRGetter = await STRGetter.deploy();
 
-    const bytesProxy = encodeProxyCall(STRProxyParameters, [
-        I_PolymathRegistry.target,
-        initRegFee,
-        initRegFee,
-        account_polymath,
-        I_STRGetter.target
-    ]);
+    const functionSignatureProxy = {
+        name: "initialize",
+        type: "function",
+        inputs: [
+            {
+                type: "address",
+                name: "_polymathRegistry"
+            },
+            {
+                type: "uint256",
+                name: "_stLaunchFee"
+            },
+            {
+                type: "uint256",
+                name: "_tickerRegFee"
+            },
+            {
+                type: "address",
+                name: "_owner"
+            },
+            {
+                type: 'address',
+                name: '_getterContract'
+            }
+        ]
+    };
+
+    const bytesProxy = web3.eth.abi.encodeFunctionCall(functionSignatureProxy, [
+      I_PolymathRegistry.target,
+      initRegFee.toString(),
+      initRegFee.toString(),
+      account_polymath,
+      I_STRGetter.target
+  ]);
     
     await I_SecurityTokenRegistryProxy.upgradeToAndCall("1.0.0", I_SecurityTokenRegistry.target, bytesProxy);
     I_STRProxied = await ethers.getContractAt("SecurityTokenRegistry", I_SecurityTokenRegistryProxy.target);

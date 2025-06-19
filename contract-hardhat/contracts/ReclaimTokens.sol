@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import "./libraries/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./libraries/token/ERC20/IERC20.sol";
 
 /**
  * @title Utility contract to allow owner to retreive any ERC20 sent to the contract

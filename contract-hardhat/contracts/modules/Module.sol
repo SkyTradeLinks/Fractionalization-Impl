@@ -8,7 +8,7 @@ import "../interfaces/IDataStore.sol";
 import "../interfaces/ISecurityToken.sol";
 import "../interfaces/ICheckPermission.sol";
 import "../storage/modules/ModuleStorage.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "../libraries/token/ERC20/IERC20.sol";
 import "../libraries/Ownable.sol";
 
 /**

@@ -11,6 +11,7 @@ import "../libraries/Ownable.sol";
 import "../interfaces/IModuleRegistry.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../datastore/DataStoreFactory.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Proxy for deploying SecurityToken instances
@@ -52,15 +53,15 @@ contract STFactory is ISTFactory, Ownable {
         require(_dataStoreFactory != address(0), "Invalid Address");
         require(_polymathRegistry != address(0), "Invalid Address");
         require(_initializationData.length > 4, "Invalid Initialization");
-        // transferManagerFactory = _transferManagerFactory;
-        // dataStoreFactory = DataStoreFactory(_dataStoreFactory);
-        // polymathRegistry = IPolymathRegistry(_polymathRegistry);
+        transferManagerFactory = _transferManagerFactory;
+        dataStoreFactory = DataStoreFactory(_dataStoreFactory);
+        polymathRegistry = IPolymathRegistry(_polymathRegistry);
 
-        // // Start at 1 so that we can distinguish deployed tokens in tokenUpgrade
-        // latestUpgrade = 1;
-        // logicContracts[latestUpgrade].logicContract = _logicContract;
-        // logicContracts[latestUpgrade].initializationData = _initializationData;
-        // logicContracts[latestUpgrade].version = _version;
+        // Start at 1 so that we can distinguish deployed tokens in tokenUpgrade
+        latestUpgrade = 1;
+        logicContracts[latestUpgrade].logicContract = _logicContract;
+        logicContracts[latestUpgrade].initializationData = _initializationData;
+        logicContracts[latestUpgrade].version = _version;
     }
 
     /**

@@ -91,7 +91,6 @@ contract VolumeRestrictionTM is VolumeRestrictionTMStorage, TransferManager {
      * @param _polyAddress Address of the polytoken
      */
     constructor (address _securityToken, address _polyAddress)
-    public
     Module(_securityToken, _polyAddress)
     {
 

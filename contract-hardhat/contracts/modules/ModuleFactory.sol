@@ -7,7 +7,7 @@ import "../interfaces/IModule.sol";
 import "../interfaces/IOracle.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../interfaces/IModuleFactory.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "../libraries/token/ERC20/IERC20.sol";
 import "../libraries/Ownable.sol";
 import "../libraries/DecimalMath.sol";
 
