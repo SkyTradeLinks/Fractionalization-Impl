@@ -16,6 +16,7 @@ import "../interfaces/token/IERC1644.sol";
 import "../interfaces/ITransferManager.sol";
 import "../libraries/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "hardhat/console.sol";
 
 
 /**
@@ -29,6 +30,9 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @notice - https://github.com/ethereum/solidity/issues/4847
  */
 contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594, IERC1643, IERC1644, IERC1410, Proxy {
+
+    // Allow the contract to receive Ether
+    receive() external payable {}
 
     // Emit at the time when module get added
     event ModuleAdded(
@@ -440,7 +444,11 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     }
 
     function _transferWithData(address _from, address _to, uint256 _value, bytes memory _data) internal {
+        console.log("Transfer here");
+        console.logBytes(_data);
         _isValidTransfer(_updateTransfer(_from, _to, _value, _data));
+        console.log("Transfer here 1");
+        console.logBytes(_data);
         // Using the internal function instead of super.transfer() in the favour of reducing the code size
         _transfer(_from, _to, _value);
     }

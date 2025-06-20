@@ -250,7 +250,7 @@ async function deploySTFactory(account_polymath: string): Promise<[STFactory, ST
     return [I_STFactory, I_STGetter, STGetterFactory, SecurityTokenLogic];
 }
 
-async function deploySTR(account_polymath: string): Promise<[any]> {
+async function deploySTR(account_polymath: string) {
     const SecurityTokenRegistry = await ethers.getContractFactory("SecurityTokenRegistry");
     I_SecurityTokenRegistry = await SecurityTokenRegistry.deploy();
 

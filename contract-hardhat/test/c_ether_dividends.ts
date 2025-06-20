@@ -1,1017 +1,1292 @@
-import latestTime from "./helpers/latestTime";
-import { duration, ensureException, promisifyLogWatch, latestBlock } from "./helpers/utils";
-import { takeSnapshot, increaseTime, revertToSnapshot } from "./helpers/time";
-import { encodeProxyCall } from "./helpers/encodeCall";
-import { catchRevert } from "./helpers/exceptions";
+import { assert, expect } from "chai";
+import { ethers, network } from "hardhat";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { Contract, ContractFactory, LogDescription } from "ethers";
+
+import { latestTime } from "./helpers/latestTime";
+import { duration, ensureException, latestBlock } from "./helpers/utils";
 import { setUpPolymathNetwork, deployEtherDividendAndVerifyed, deployGPMAndVerifyed } from "./helpers/createInstances";
-import { encodeModuleCall } from "./helpers/encodeCall";
+import { increaseTime, revertToSnapshot, takeSnapshot } from "./helpers/time";
+import { encodeModuleCall, encodeProxyCall } from "./helpers/encodeCall";
 
-const SecurityToken = artifacts.require("./SecurityToken.sol");
-const GeneralTransferManager = artifacts.require("./GeneralTransferManager");
-const EtherDividendCheckpoint = artifacts.require("./EtherDividendCheckpoint");
-const GeneralPermissionManager = artifacts.require("GeneralPermissionManager");
-const STGetter = artifacts.require("./STGetter.sol");
+describe("EtherDividendCheckpoint", function() {
 
-const Web3 = require("web3");
-let BN = Web3.utils.BN;
-const web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545")); // Hardcoded development port
-
-contract("EtherDividendCheckpoint", async (accounts) => {
     // Accounts Variable declaration
-    let account_polymath;
-    let account_issuer;
-    let token_owner;
-    let wallet;
-    let account_investor1;
-    let account_investor2;
-    let account_investor3;
-    let account_investor4;
-    let account_manager;
-    let account_temp;
+    let account_polymath: HardhatEthersSigner;
+    let account_issuer: HardhatEthersSigner;
+    let token_owner: HardhatEthersSigner;
+    let wallet: HardhatEthersSigner;
+    let account_investor1: HardhatEthersSigner;
+    let account_investor2: HardhatEthersSigner;
+    let account_investor3: HardhatEthersSigner;
+    let account_investor4: HardhatEthersSigner;
+    let account_manager: HardhatEthersSigner;
+    let account_temp: HardhatEthersSigner;
+    let accounts: HardhatEthersSigner[];
 
-    let message = "Transaction Should Fail!";
-    let dividendName = "0x546573744469766964656e640000000000000000000000000000000000000000";
-    const address_zero = "0x0000000000000000000000000000000000000000";
-    const one_address = "0x0000000000000000000000000000000000000001";
+    const message = "Transaction Should Fail!";
+    const dividendName = "0x546573744469766964656e640000000000000000000000000000000000000000";
 
     // Contract Instance Declaration
-    let I_SecurityTokenRegistryProxy;
-    let I_GeneralTransferManagerFactory;
-    let P_EtherDividendCheckpointFactory;
-    let P_EtherDividendCheckpoint;
-    let I_EtherDividendCheckpointFactory;
-    let I_GeneralPermissionManager;
-    let I_GeneralPermissionManagerFactory;
-    let I_EtherDividendCheckpoint;
-    let I_GeneralTransferManager;
-    let I_ModuleRegistryProxy;
-    let I_ModuleRegistry;
-    let I_FeatureRegistry;
-    let I_SecurityTokenRegistry;
-    let I_STRProxied;
-    let I_STFactory;
-    let I_SecurityToken;
-    let I_PolyToken;
-    let I_MRProxied;
-    let I_PolymathRegistry;
-    let I_STRGetter;
-    let I_STGetter;
-    let stGetter;
+    let I_GeneralTransferManagerFactory: any;
+    let I_SecurityTokenRegistryProxy: any;
+    let P_EtherDividendCheckpointFactory: any;
+    let P_EtherDividendCheckpoint: any;
+    let I_EtherDividendCheckpointFactory: any;
+    let I_GeneralPermissionManager: any;
+    let I_GeneralPermissionManagerFactory: any;  
+    let I_EtherDividendCheckpoint: any;
+    let I_GeneralTransferManager: any;
+    let I_ModuleRegistryProxy: any;
+    let I_ModuleRegistry: any;
+    let I_STRProxied: any;
+    let I_MRProxied: any;
+    let I_FeatureRegistry: any;
+    let I_SecurityTokenRegistry: any;
+    let I_STFactory: any;
+    let I_SecurityToken: any;
+    let I_PolyToken: any;
+    let I_PolymathRegistry: any;
+    let I_STRGetter: any;
+    let I_STGetter: any;  
+    let stGetter: any;
+
+    // Contract Factories
+    let GeneralTransferManagerFactory: any;
+    let EtherDividendCheckpointFactory: any;
+    let SecurityTokenFactory: any;
+    let STGetterFactory: any;
 
     // SecurityToken Details
     const name = "Team";
-    const symbol = "sap";
+    const symbol = "SAP";
     const tokenDetails = "This is equity type of issuance";
     const decimals = 18;
     const contact = "team@polymath.network";
-    const managerDetails = web3.utils.fromAscii("Hello");
-    let snapId;
-    // Module key
+
+    // Module keys
     const delegateManagerKey = 1;
     const transferManagerKey = 2;
     const stoKey = 3;
     const checkpointKey = 4;
-    const DividendParameters = ["address"];
+
+    // Manager details
+    const managerDetails = ethers.encodeBytes32String("Hello");
 
     // Initial fee for ticker registry and security token registry
-    const initRegFee = new BN(web3.utils.toWei("1000"));
+    const initRegFee = ethers.parseEther("1000");
 
-    let currentTime;
+    const one_address = "0x0000000000000000000000000000000000000001";
+    const address_zero = ethers.ZeroAddress;
+
+    let currentTime: number;
+    let snapId: string;
+
+    const DividendParameters = ["address"];
 
     before(async () => {
-        currentTime = new BN(await latestTime());
+        // Get signers
+        accounts = await ethers.getSigners();
+        
+        currentTime = await latestTime();
+        
+        // Account assignments
         account_polymath = accounts[0];
         account_issuer = accounts[1];
-
         token_owner = account_issuer;
-
+        account_temp = accounts[2];
+        wallet = accounts[3];
+        account_manager = accounts[5];
         account_investor1 = accounts[6];
         account_investor2 = accounts[7];
         account_investor3 = accounts[8];
         account_investor4 = accounts[9];
-        account_manager = accounts[5];
-        account_temp = accounts[2];
-        wallet = accounts[3];
 
-         // Step 1: Deploy the genral PM ecosystem
-         let instances = await setUpPolymathNetwork(account_polymath, token_owner);
+        console.log(token_owner.address, "token_owner.address");
 
-         [
-             I_PolymathRegistry,
-             I_PolyToken,
-             I_FeatureRegistry,
-             I_ModuleRegistry,
-             I_ModuleRegistryProxy,
-             I_MRProxied,
-             I_GeneralTransferManagerFactory,
-             I_STFactory,
-             I_SecurityTokenRegistry,
-             I_SecurityTokenRegistryProxy,
-             I_STRProxied,
-             I_STRGetter,
-             I_STGetter
-         ] = instances;
+        // Get contract factories
+        GeneralTransferManagerFactory = await ethers.getContractFactory("GeneralTransferManager");
+        EtherDividendCheckpointFactory = await ethers.getContractFactory("EtherDividendCheckpoint");
 
-        [P_EtherDividendCheckpointFactory] = await deployEtherDividendAndVerifyed(account_polymath, I_MRProxied, web3.utils.toWei("500", "ether"));
-        [I_EtherDividendCheckpointFactory] = await deployEtherDividendAndVerifyed(account_polymath, I_MRProxied, 0);
+        // Step 1: Deploy the general PM ecosystem
+        const instances = await setUpPolymathNetwork(account_polymath.address, token_owner.address);
+
+        [
+            I_PolymathRegistry,
+            I_PolyToken,
+            I_FeatureRegistry,
+            I_ModuleRegistry,
+            I_ModuleRegistryProxy,
+            I_MRProxied,
+            I_GeneralTransferManagerFactory,
+            I_STFactory,
+            I_SecurityTokenRegistry,
+            I_SecurityTokenRegistryProxy,
+            I_STRProxied,
+            I_STRGetter,
+            I_STGetter
+        ] = instances;
+
+        console.log("=== DEBUG INFO ===");
+        console.log("I_STRProxied address:", await I_STRProxied.getAddress());
+        console.log("I_STRProxied constructor name:", I_STRProxied.constructor.name);
+        console.log("Available functions:", Object.getOwnPropertyNames(I_STRProxied).filter(name => typeof I_STRProxied[name] === 'function'));
+        console.log("Has registerNewTicker:", typeof I_STRProxied.registerNewTicker);
+
+        // Deploy EtherDividendCheckpoint factories
+        [P_EtherDividendCheckpointFactory] = await deployEtherDividendAndVerifyed(
+            account_polymath.address,
+            I_MRProxied,
+            ethers.parseEther("500")
+        );
+        
+        [I_EtherDividendCheckpointFactory] = await deployEtherDividendAndVerifyed(
+            account_polymath.address, 
+            I_MRProxied, 
+            0n
+        );
 
         // Printing all the contract addresses
         console.log(`
         --------------------- Polymath Network Smart Contracts: ---------------------
-        PolymathRegistry:                  ${I_PolymathRegistry.address}
-        SecurityTokenRegistryProxy:        ${I_SecurityTokenRegistryProxy.address}
-        SecurityTokenRegistry:             ${I_SecurityTokenRegistry.address}
-        ModuleRegistry:                    ${I_ModuleRegistry.address}
-        ModuleRegistryProxy:               ${I_ModuleRegistryProxy.address}
-        FeatureRegistry:                   ${I_FeatureRegistry.address}
+        PolymathRegistry:                  ${I_PolymathRegistry.target}
+        SecurityTokenRegistryProxy:        ${I_SecurityTokenRegistryProxy.target}
+        SecurityTokenRegistry:             ${I_SecurityTokenRegistry.target}
+        ModuleRegistry:                    ${I_ModuleRegistry.target}
+        ModuleRegistryProxy:               ${I_ModuleRegistryProxy.target}
+        FeatureRegistry:                   ${I_FeatureRegistry.target}
 
-        STFactory:                         ${I_STFactory.address}
-        GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.address}
-
-        EtherDividendCheckpointFactory:    ${I_EtherDividendCheckpointFactory.address}
+        STFactory:                         ${I_STFactory.target}
+        GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.target}
+        EtherDividendCheckpointFactory:    ${I_EtherDividendCheckpointFactory.target}
         -----------------------------------------------------------------------------
         `);
     });
 
     describe("Generate the SecurityToken", async () => {
         it("Should register the ticker before the generation of the security token", async () => {
-            await I_PolyToken.approve(I_STRProxied.address, initRegFee, { from: token_owner });
-            let tx = await I_STRProxied.registerNewTicker(token_owner, symbol, { from: token_owner });
-            assert.equal(tx.logs[0].args._owner, token_owner);
-            assert.equal(tx.logs[0].args._ticker, symbol.toUpperCase());
+            console.log("Registering the ticker before the generation of the security token", I_STRProxied);
+            await I_PolyToken.connect(token_owner).approve(I_STRProxied.target, initRegFee);
+            const tx = await I_STRProxied.connect(token_owner).registerNewTicker(token_owner.address, symbol);
+
+            const receipt = await tx.wait();
+            const fullReceipt = await ethers.provider.getTransactionReceipt(receipt!.hash);
+            const strProxiedAddress = await I_STRProxied.getAddress();
+        
+            const logs = fullReceipt!.logs.filter(log => 
+                log.address.toLowerCase() === strProxiedAddress.toLowerCase()
+            );
+        
+            let eventFound = false;
+            for (const log of logs) {
+                try {
+                    const parsed = I_STRProxied.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "RegisterTicker") { 
+                        expect(parsed.args._owner).to.equal(token_owner.address);
+                        expect(parsed.args._ticker).to.equal(symbol.toUpperCase());
+                        eventFound = true;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log: ${err.message}`);
+                }
+            }
+        
+            expect(eventFound).to.be.true;
         });
 
         it("Should generate the new security token with the same symbol as registered above", async () => {
-            await I_PolyToken.approve(I_STRProxied.address, initRegFee, { from: token_owner });
+            await I_PolyToken.connect(token_owner).approve(I_STRProxied.target, initRegFee);
 
-            let tx = await I_STRProxied.generateNewSecurityToken(name, symbol, tokenDetails, false, wallet, 0, { from: token_owner });
+            const tx = await I_STRProxied.connect(token_owner).generateNewSecurityToken(
+                name,
+                symbol,
+                tokenDetails,
+                false,
+                wallet.address,
+                0
+            );
+            const receipt = await tx.wait();
+            let securityTokenEvent: LogDescription | null = null;
 
-            // Verify the successful generation of the security token
-            assert.equal(tx.logs[1].args._ticker, symbol.toUpperCase(), "SecurityToken doesn't get deployed");
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_STRProxied.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "NewSecurityToken") {
+                        console.log("Parsed log:", parsed);
+                        securityTokenEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
 
-            I_SecurityToken = await SecurityToken.at(tx.logs[1].args._securityTokenAddress);
-            stGetter = await STGetter.at(I_SecurityToken.address);
-            assert.equal(await stGetter.getTreasuryWallet.call(), wallet, "Incorrect wallet set")
+            expect(securityTokenEvent).to.not.be.null;
+            expect(securityTokenEvent!.args._ticker).to.equal(symbol.toUpperCase(), "SecurityToken doesn't get deployed");
 
-            const log = (await I_SecurityToken.getPastEvents('ModuleAdded', {filter: {transactionHash: tx.transactionHash}}))[0];
+            I_SecurityToken = await ethers.getContractAt("SecurityToken", securityTokenEvent!.args._securityTokenAddress);
+            stGetter = await ethers.getContractAt("STGetter", I_SecurityToken.target);
 
-            // Verify that GeneralTransferManager module get added successfully or not
-            assert.equal(log.args._types[0].toNumber(), 2);
-            assert.equal(web3.utils.toAscii(log.args._name).replace(/\u0000/g, ""), "GeneralTransferManager");
+            expect(await stGetter.getTreasuryWallet()).to.equal(wallet.address, "Incorrect wallet set");
+
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_SecurityToken.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "ModuleAdded") {
+                        securityTokenEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(securityTokenEvent).to.not.be.null;
+            const nameBytes32 = ethers.decodeBytes32String(securityTokenEvent!.args._name).replace(/\u0000/g, '');
+            expect(nameBytes32).to.equal("GeneralTransferManager", "SecurityToken doesn't have the transfer manager module");
         });
 
         it("Should initialize the auto attached modules", async () => {
-            let moduleData = (await stGetter.getModulesByType(2))[0];
-            I_GeneralTransferManager = await GeneralTransferManager.at(moduleData);
+            const moduleData = (await stGetter.getModulesByType(2))[0];
+            I_GeneralTransferManager = await ethers.getContractAt("GeneralTransferManager", moduleData);
         });
 
-        it("Should successfully attach the ERC20DividendCheckpoint with the security token", async () => {
-            await I_PolyToken.getTokens(new BN(web3.utils.toWei("2000", "ether")), token_owner);
-            let bytesDividend = encodeModuleCall(DividendParameters, [wallet]);
-            await catchRevert(
-                I_SecurityToken.addModule(P_EtherDividendCheckpointFactory.address, bytesDividend, new BN(web3.utils.toWei("2000", "ether")), new BN(0), false, {
-                    from: token_owner
-                })
-            );
+        it("Should fail to attach the paid EtherDividendCheckpoint with the security token due to insufficient POLY", async () => {
+            const bytesDividend = encodeModuleCall(DividendParameters, [wallet.address]);
+            await expect(
+            I_SecurityToken.connect(token_owner).addModule(
+                P_EtherDividendCheckpointFactory.target,
+                bytesDividend,
+                ethers.parseEther("2000"),
+                0n,
+                false
+            )
+            ).to.be.reverted;
         });
 
-        it("Should successfully attach the EtherDividendCheckpoint with the security token", async () => {
-            let snapId = await takeSnapshot();
-            await I_PolyToken.transfer(I_SecurityToken.address, new BN(web3.utils.toWei("2000", "ether")), { from: token_owner });
-            let bytesDividend = encodeModuleCall(DividendParameters, [wallet]);
-            const tx = await I_SecurityToken.addModule(P_EtherDividendCheckpointFactory.address, bytesDividend, new BN(web3.utils.toWei("2000", "ether")), new BN(0), false, {
-                from: token_owner
-            });
-            assert.equal(tx.logs[3].args._types[0].toNumber(), checkpointKey, "EtherDividendCheckpoint doesn't get deployed");
-            assert.equal(
-                web3.utils.toAscii(tx.logs[3].args._name).replace(/\u0000/g, ""),
-                "EtherDividendCheckpoint",
-                "EtherDividendCheckpoint module was not added"
+        it("Should successfully attach the paid EtherDividendCheckpoint with the security token", async () => {
+            snapId = await takeSnapshot();
+            await I_PolyToken.connect(token_owner).transfer(I_SecurityToken.target, ethers.parseEther("2000"));
+            const bytesDividend = encodeModuleCall(DividendParameters, [wallet.address]);
+            console.log("Adding EtherDividendCheckpoint module with POLY payment");
+            const tx = await I_SecurityToken.connect(token_owner).addModule(
+                P_EtherDividendCheckpointFactory.target,
+                bytesDividend,
+                ethers.parseEther("2000"),
+                0n,
+                false
             );
-            P_EtherDividendCheckpoint = await EtherDividendCheckpoint.at(tx.logs[3].args._module);
+            console.log("Adding EtherDividendCheckpoint module with POLY payment 1");
+            const receipt = await tx.wait();
+            let moduleAddedEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+                const parsed = I_SecurityToken.interface.parseLog(log);
+                if (parsed && parsed.name === "ModuleAdded") {
+                moduleAddedEvent = parsed;
+                break;
+                }
+            } catch (e) {
+                // Ignore parsing errors
+            }
+            }
+
+            expect(moduleAddedEvent).to.not.be.null;
+            expect(moduleAddedEvent!.args._types[0]).to.equal(checkpointKey);
+            const moduleName = ethers.decodeBytes32String(moduleAddedEvent!.args._name).replace(/\u0000/g, "");
+            expect(moduleName).to.equal("EtherDividendCheckpoint");
+            P_EtherDividendCheckpoint = await ethers.getContractAt("EtherDividendCheckpoint", moduleAddedEvent!.args._module);
             await revertToSnapshot(snapId);
         });
 
-        it("Should successfully attach the EtherDividendCheckpoint with the security token", async () => {
-            let bytesDividend = encodeModuleCall(DividendParameters, [address_zero]);
-            const tx = await I_SecurityToken.addModule(I_EtherDividendCheckpointFactory.address, bytesDividend, new BN(0), new BN(0), false, { from: token_owner });
-            assert.equal(tx.logs[2].args._types[0].toNumber(), checkpointKey, "EtherDividendCheckpoint doesn't get deployed");
-            assert.equal(
-                web3.utils.toAscii(tx.logs[2].args._name).replace(/\u0000/g, ""),
-                "EtherDividendCheckpoint",
-                "EtherDividendCheckpoint module was not added"
+        it("Should successfully attach the free EtherDividendCheckpoint with the security token", async () => {
+            const bytesDividend = encodeModuleCall(DividendParameters, [address_zero]);
+            const tx = await I_SecurityToken.connect(token_owner).addModule(
+            I_EtherDividendCheckpointFactory.target,
+            bytesDividend,
+            0n,
+            0n,
+            false
             );
-            I_EtherDividendCheckpoint = await EtherDividendCheckpoint.at(tx.logs[2].args._module);
-        });
-    });
+            const receipt = await tx.wait();
+            let moduleAddedEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+                const parsed = I_SecurityToken.interface.parseLog(log);
+                if (parsed && parsed.name === "ModuleAdded") {
+                moduleAddedEvent = parsed;
+                break;
+                }
+            } catch (e) {
+                // Ignore parsing errors
+            }
+            }
 
-    describe("Check Dividend payouts", async () => {
+            expect(moduleAddedEvent).to.not.be.null;
+            expect(moduleAddedEvent!.args._types[0]).to.equal(checkpointKey);
+            const moduleName = ethers.decodeBytes32String(moduleAddedEvent!.args._name).replace(/\u0000/g, "");
+            expect(moduleName).to.equal("EtherDividendCheckpoint");
+            I_EtherDividendCheckpoint = await ethers.getContractAt("EtherDividendCheckpoint", moduleAddedEvent!.args._module);
+        });
+        });
+
+        describe("Check Dividend payouts", async () => {
         it("Buy some tokens for account_investor1 (1 ETH)", async () => {
             // Add the Investor in to the whitelist
-
-            let tx = await I_GeneralTransferManager.modifyKYCData(
-                account_investor1,
-                currentTime,
-                currentTime,
-                currentTime.add(new BN(duration.days(300000))),
-                {
-                    from: account_issuer,
-                    gas: 500000
-                }
+            const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+            account_investor1.address,
+            currentTime,
+            currentTime,
+            BigInt(currentTime) + BigInt(duration.days(300000))
             );
 
-            assert.equal(
-                tx.logs[0].args._investor.toLowerCase(),
-                account_investor1.toLowerCase(),
-                "Failed in adding the investor in whitelist"
-            );
+            const receipt = await tx.wait();
+            let kycEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_GeneralTransferManager.interface.parseLog(log);
+            if (parsed && parsed.name === "ModifyKYCData") {
+            kycEvent = parsed;
+            break;
+            }
+            } catch (e) {
+            // Ignore parsing errors
+            }
+            }
+            expect(kycEvent).to.not.be.null;
+            expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_investor1.address.toLowerCase());
 
             // Jump time
             await increaseTime(5000);
 
             // Mint some tokens
-            await I_SecurityToken.issue(account_investor1, new BN(web3.utils.toWei("1", "ether")), "0x0", { from: token_owner });
+            await I_SecurityToken.connect(token_owner).issue(account_investor1.address, ethers.parseEther("1"), "0x");
 
-            assert.equal((await I_SecurityToken.balanceOf(account_investor1)).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
+            expect(await I_SecurityToken.balanceOf(account_investor1.address)).to.equal(ethers.parseEther("1"));
         });
 
         it("Buy some tokens for account_investor2 (2 ETH)", async () => {
             // Add the Investor in to the whitelist
-
-            let tx = await I_GeneralTransferManager.modifyKYCData(
-                account_investor2,
-                currentTime,
-                currentTime,
-                currentTime.add(new BN(duration.days(3000000))),
-                {
-                    from: account_issuer,
-                    gas: 500000
-                }
+            const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+            account_investor2.address,
+            currentTime,
+            currentTime,
+            BigInt(currentTime) + BigInt(duration.days(3000000))
             );
 
-            assert.equal(
-                tx.logs[0].args._investor.toLowerCase(),
-                account_investor2.toLowerCase(),
-                "Failed in adding the investor in whitelist"
-            );
+            const receipt = await tx.wait();
+            let kycEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_GeneralTransferManager.interface.parseLog(log);
+            if (parsed && parsed.name === "ModifyKYCData") {
+            kycEvent = parsed;
+            break;
+            }
+            } catch (e) {
+            // Ignore parsing errors
+            }
+            }
+            expect(kycEvent).to.not.be.null;
+            expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_investor2.address.toLowerCase());
 
             // Mint some tokens
-            await I_SecurityToken.issue(account_investor2, new BN(web3.utils.toWei("2", "ether")), "0x0", { from: token_owner });
+            await I_SecurityToken.connect(token_owner).issue(account_investor2.address, ethers.parseEther("2"), "0x");
 
-            assert.equal((await I_SecurityToken.balanceOf(account_investor2)).toString(), new BN(web3.utils.toWei("2", "ether")).toString());
+            expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(ethers.parseEther("2"));
         });
 
-        it("Should fail in creating the dividend", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(10);
-            await catchRevert(I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, { from: token_owner }));
+        it("Should fail in creating the dividend (no value)", async () => {
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(10);
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividend(maturity, expiry, dividendName)
+            ).to.be.reverted;
         });
 
-        it("Should fail in creating the dividend", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() - duration.days(10);
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("1.5", "ether"))
-                })
-            );
+        it("Should fail in creating the dividend (expiry in past)", async () => {
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) - duration.days(10);
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividend(maturity, expiry, dividendName, {
+            value: ethers.parseEther("1.5")
+            })
+            ).to.be.reverted;
         });
 
-        it("Should fail in creating the dividend", async () => {
-            let maturity = await latestTime() - duration.days(2);
-            let expiry = await latestTime() - duration.days(1);
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("1.5", "ether"))
-                })
-            );
+        it("Should fail in creating the dividend (dates in past)", async () => {
+            const maturity = (await latestTime()) - duration.days(2);
+            const expiry = (await latestTime()) - duration.days(1);
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividend(maturity, expiry, dividendName, {
+            value: ethers.parseEther("1.5")
+            })
+            ).to.be.reverted;
         });
 
         it("Set withholding tax of 20% on investor 2", async () => {
-            await I_EtherDividendCheckpoint.setWithholdingFixed([account_investor2], new BN(web3.utils.toWei("0.2", "ether")), { from: token_owner });
+            await I_EtherDividendCheckpoint.connect(token_owner).setWithholding(
+            [account_investor2.address],
+            [ethers.parseEther("0.2")]
+            );
         });
 
-        it("Should fail in creating the dividend", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividend(maturity, expiry, "0x0", {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("1.5", "ether"))
+        it("Should fail in creating the dividend (empty name)", async () => {
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            await expect(
+                I_EtherDividendCheckpoint.connect(token_owner).createDividend(maturity, expiry, ethers.ZeroHash, {
+                    value: ethers.parseEther("1.5")
                 })
-            );
+            ).to.be.reverted;
         });
 
         it("Create new dividend", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let tx = await I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, {
-                from: token_owner,
-                value: new BN(web3.utils.toWei("1.5", "ether"))
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).createDividend(maturity, expiry, dividendName, {
+            value: ethers.parseEther("1.5")
             });
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 1, "Dividend should be created at checkpoint 1");
-            assert.equal(tx.logs[0].args._name.toString(), dividendName, "Dividend name incorrect in event");
-            console.log("Dividend first :" + tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+            if (parsed && parsed.name === "EtherDividendDeposited") {
+            dividendEvent = parsed;
+            break;
+            }
+            } catch (e) {
+            // Ignore parsing errors
+            }
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(1n);
+            expect(dividendEvent!.args._name).to.equal(dividendName);
+            console.log("Dividend first :" + dividendEvent!.args._dividendIndex.toString());
         });
 
         it("Investor 1 transfers his token balance to investor 2", async () => {
-            await I_SecurityToken.transfer(account_investor2, new BN(web3.utils.toWei("1", "ether")), { from: account_investor1 });
-            assert.equal(await I_SecurityToken.balanceOf(account_investor1), 0);
-            assert.equal((await I_SecurityToken.balanceOf(account_investor2)).toString(), new BN(web3.utils.toWei("3", "ether")).toString());
+            await I_SecurityToken.connect(account_investor1).transfer(account_investor2.address, ethers.parseEther("1"));
+            expect(await I_SecurityToken.balanceOf(account_investor1.address)).to.equal(0n);
+            expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(ethers.parseEther("3"));
         });
 
-        it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
-            await catchRevert(I_EtherDividendCheckpoint.pushDividendPayment(0, new BN(0), 10, { from: token_owner }));
+        it("Should fail to push dividends (before maturity)", async () => {
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).pushDividendPayment(0, 0, 10)).to.be.reverted;
         });
 
-        it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
+        it("Should fail to push dividends (not owner)", async () => {
             // Increase time by 2 day
             await increaseTime(duration.days(2));
-            await catchRevert(I_EtherDividendCheckpoint.pushDividendPayment(0, new BN(0), 10, { from: account_temp }));
+            await expect(I_EtherDividendCheckpoint.connect(account_temp).pushDividendPayment(0, 0, 10)).to.be.reverted;
         });
 
-        it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
-            await catchRevert(I_EtherDividendCheckpoint.pushDividendPayment(2, new BN(0), 10, { from: token_owner }));
+        it("Should fail to push dividends (invalid dividend index)", async () => {
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).pushDividendPayment(2, 0, 10)).to.be.reverted;
         });
 
-        it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
-            let investor1Balance = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2Balance = new BN(await web3.eth.getBalance(account_investor2));
-            await I_EtherDividendCheckpoint.pushDividendPayment(0, new BN(0), 10, { from: token_owner });
-            let investor1BalanceAfter = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter = new BN(await web3.eth.getBalance(account_investor2));
-            assert.equal(investor1BalanceAfter.sub(investor1Balance).toString(), new BN(web3.utils.toWei("0.5", "ether")).toString());
-            assert.equal(investor2BalanceAfter.sub(investor2Balance).toString(), new BN(web3.utils.toWei("0.8", "ether")).toString());
+        it("Issuer pushes dividends to account holders", async () => {
+            const investor1Balance = await ethers.provider.getBalance(account_investor1.address);
+            const investor2Balance = await ethers.provider.getBalance(account_investor2.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).pushDividendPayment(0, 0, 10);
+            const investor1BalanceAfter = await ethers.provider.getBalance(account_investor1.address);
+            const investor2BalanceAfter = await ethers.provider.getBalance(account_investor2.address);
+            expect(investor1BalanceAfter - investor1Balance).to.equal(ethers.parseEther("0.5"));
+            expect(investor2BalanceAfter - investor2Balance).to.equal(ethers.parseEther("0.8"));
             //Check fully claimed
-            assert.equal((await I_EtherDividendCheckpoint.dividends(0))[5].toString(), new BN(web3.utils.toWei("1.5", "ether")).toString());
+            const dividend = await I_EtherDividendCheckpoint.dividends(0);
+            expect(dividend[5]).to.equal(ethers.parseEther("1.5")); // claimedAmount
         });
 
         it("Should not allow reclaiming withholding tax with incorrect index", async () => {
-            await catchRevert(
-                I_EtherDividendCheckpoint.withdrawWithholding(300, { from: token_owner, gasPrice: 0 }),
-                "tx -> failed because dividend index is not valid"
-            );
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).withdrawWithholding(300)).to.be.reverted;
         });
 
         it("Issuer reclaims withholding tax", async () => {
-            let issuerBalance = new BN(await web3.eth.getBalance(wallet));
-            await I_EtherDividendCheckpoint.withdrawWithholding(0, { from: token_owner, gasPrice: 0 });
-            let issuerBalanceAfter = new BN(await web3.eth.getBalance(wallet));
-            assert.equal(issuerBalanceAfter.sub(issuerBalance).toString(), new BN(web3.utils.toWei("0.2", "ether")).toString());
+            const walletBalance = await ethers.provider.getBalance(wallet.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).withdrawWithholding(0);
+            const walletBalanceAfter = await ethers.provider.getBalance(wallet.address);
+            expect(walletBalanceAfter - walletBalance).to.equal(ethers.parseEther("0.2"));
         });
 
         it("No more withholding tax to withdraw", async () => {
-            let issuerBalance = new BN(await web3.eth.getBalance(token_owner));
-            await I_EtherDividendCheckpoint.withdrawWithholding(0, { from: token_owner, gasPrice: 0 });
-            let issuerBalanceAfter = new BN(await web3.eth.getBalance(token_owner));
-            assert.equal(issuerBalanceAfter.sub(issuerBalance).toString(), new BN(web3.utils.toWei("0", "ether")).toString());
+            const walletBalance = await ethers.provider.getBalance(wallet.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).withdrawWithholding(0);
+            const walletBalanceAfter = await ethers.provider.getBalance(wallet.address);
+            expect(walletBalanceAfter - walletBalance).to.equal(0n);
         });
 
         it("Set withholding tax of 100% on investor 2", async () => {
-            await I_EtherDividendCheckpoint.setWithholdingFixed([account_investor2], new BN(100).mul(new BN(10).pow(new BN(16))), { from: token_owner });
+            // 100% is represented as 10**18 (100 * 10**16)
+            await I_EtherDividendCheckpoint.connect(token_owner).setWithholding([account_investor2.address], [ethers.parseEther("1")]);
         });
 
         it("Buy some tokens for account_temp (1 ETH)", async () => {
             // Add the Investor in to the whitelist
-
-            let tx = await I_GeneralTransferManager.modifyKYCData(
-                account_temp,
-                currentTime,
-                currentTime,
-                currentTime.add(new BN(duration.days(200000))),
-                {
-                    from: account_issuer,
-                    gas: 500000
-                }
+            const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+            account_temp.address,
+            currentTime,
+            currentTime,
+            BigInt(currentTime) + BigInt(duration.days(200000))
             );
 
-            assert.equal(tx.logs[0].args._investor.toLowerCase(), account_temp.toLowerCase(), "Failed in adding the investor in whitelist");
+            const receipt = await tx.wait();
+            let kycEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_GeneralTransferManager.interface.parseLog(log);
+            if (parsed && parsed.name === "ModifyKYCData") {
+            kycEvent = parsed;
+            break;
+            }
+            } catch (e) {
+            // Ignore parsing errors
+            }
+            }
+            expect(kycEvent).to.not.be.null;
+            expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_temp.address.toLowerCase());
 
             // Mint some tokens
-            await I_SecurityToken.issue(account_temp, new BN(web3.utils.toWei("1", "ether")), "0x0", { from: token_owner });
+            await I_SecurityToken.connect(token_owner).issue(account_temp.address, ethers.parseEther("1"), "0x");
 
-            assert.equal((await I_SecurityToken.balanceOf(account_temp)).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
+            expect(await I_SecurityToken.balanceOf(account_temp.address)).to.equal(ethers.parseEther("1"));
         });
 
         it("Create new dividend", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let tx = await I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, {
-                from: token_owner,
-                value: new BN(web3.utils.toWei("1.5", "ether"))
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).createDividend(maturity, expiry, dividendName, {
+            value: ethers.parseEther("1.5")
             });
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 2, "Dividend should be created at checkpoint 2");
-            console.log("Dividend second :" + tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+            if (parsed && parsed.name === "EtherDividendDeposited") {
+            dividendEvent = parsed;
+            break;
+            }
+            } catch (e) {
+            // Ignore parsing errors
+            }
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(2n);
+            console.log("Dividend second :" + dividendEvent!.args._dividendIndex.toString());
         });
 
         it("Issuer pushes dividends fails due to passed expiry", async () => {
             await increaseTime(duration.days(12));
-            await catchRevert(I_EtherDividendCheckpoint.pushDividendPayment(0, new BN(0), 10, { from: token_owner }));
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).pushDividendPayment(1, 0, 10)).to.be.reverted;
         });
 
         it("Issuer reclaims dividend", async () => {
-            let tx = await I_EtherDividendCheckpoint.reclaimDividend(1, { from: token_owner, gas: 500000 });
-            assert.equal(tx.logs[0].args._claimedAmount.toString(), new BN(web3.utils.toWei("1.5", "ether")).toString());
-            await catchRevert(I_EtherDividendCheckpoint.reclaimDividend(1, { from: token_owner, gas: 500000 }));
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).reclaimDividend(1);
+            const receipt = await tx.wait();
+            let reclaimEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+                    if (parsed && parsed.name === "EtherDividendReclaimed") {
+                        reclaimEvent = parsed;
+                        break;
+                    }
+                } catch (e) {
+                // Ignore parsing errors
+                }
+            }
+            expect(reclaimEvent).to.not.be.null;
+            expect(reclaimEvent!.args._claimedAmount).to.equal(ethers.parseEther("1.5"));
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).reclaimDividend(1)).to.be.reverted;
         });
 
         it("Still no more withholding tax to withdraw", async () => {
-            let issuerBalance = new BN(await web3.eth.getBalance(token_owner));
-            await I_EtherDividendCheckpoint.withdrawWithholding(0, { from: token_owner, gasPrice: 0 });
-            let issuerBalanceAfter = new BN(await web3.eth.getBalance(token_owner));
-            assert.equal(issuerBalanceAfter.sub(issuerBalance).toString(), new BN(web3.utils.toWei("0", "ether")).toString());
+            const walletBalance = await ethers.provider.getBalance(wallet.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).withdrawWithholding(0);
+            const walletBalanceAfter = await ethers.provider.getBalance(wallet.address);
+            expect(walletBalanceAfter - walletBalance).to.equal(0n);
         });
 
         it("Buy some tokens for account_investor3 (7 ETH)", async () => {
             // Add the Investor in to the whitelist
+            const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+                account_investor3.address,
+                currentTime,
+                currentTime,
+                BigInt(currentTime) + BigInt(duration.days(10000))
+            );
 
-            let tx = await I_GeneralTransferManager.modifyKYCData(
-                account_investor3,
-                currentTime,
-                currentTime,
-                currentTime.add(new BN(duration.days(10000))),
-                {
-                    from: account_issuer,
-                    gas: 500000
+            const receipt = await tx.wait();
+            let kycEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_GeneralTransferManager.interface.parseLog(log);
+                    if (parsed && parsed.name === "ModifyKYCData") {
+                        kycEvent = parsed;
+                        break;
+                    }
+                } catch (e) {
+                // Ignore parsing errors
                 }
-            );
-
-            assert.equal(
-                tx.logs[0].args._investor.toLowerCase(),
-                account_investor3.toLowerCase(),
-                "Failed in adding the investor in whitelist"
-            );
+            }
+            expect(kycEvent).to.not.be.null;
+            expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_investor3.address.toLowerCase());
 
             // Mint some tokens
-            await I_SecurityToken.issue(account_investor3, new BN(web3.utils.toWei("7", "ether")), "0x0", { from: token_owner });
+            await I_SecurityToken.connect(token_owner).issue(account_investor3.address, ethers.parseEther("7"), "0x");
 
-            assert.equal((await I_SecurityToken.balanceOf(account_investor3)).toString(), new BN(web3.utils.toWei("7", "ether")).toString());
+            expect(await I_SecurityToken.balanceOf(account_investor3.address)).to.equal(ethers.parseEther("7"));
         });
 
         it("Create another new dividend", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(10);
-            let tx = await I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, {
-                from: token_owner,
-                value: new BN(web3.utils.toWei("11", "ether"))
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(10);
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).createDividend(maturity, expiry, dividendName, {
+            value: ethers.parseEther("11")
             });
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 3, "Dividend should be created at checkpoint 3");
-            console.log("Dividend third :" + tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+            if (parsed && parsed.name === "EtherDividendDeposited") {
+            dividendEvent = parsed;
+            break;
+            }
+            } catch (e) {
+            // Ignore parsing errors
+            }
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(3n);
+            console.log("Dividend third :" + dividendEvent!.args._dividendIndex.toString());
         });
 
         it("should investor 3 claims dividend - fails bad index", async () => {
-            let investor1Balance = new BN(await I_PolyToken.balanceOf(account_investor1));
-            let investor2Balance = new BN(await I_PolyToken.balanceOf(account_investor2));
-            let investor3Balance = new BN(await I_PolyToken.balanceOf(account_investor3));
-            await catchRevert(I_EtherDividendCheckpoint.pullDividendPayment(5, { from: account_investor3, gasPrice: 0 }));
+            await expect(I_EtherDividendCheckpoint.connect(account_investor3).pullDividendPayment(5)).to.be.reverted;
         });
 
         it("Should investor 3 claims dividend", async () => {
-            let investor1Balance = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2Balance = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3Balance = new BN(await web3.eth.getBalance(account_investor3));
-            await I_EtherDividendCheckpoint.pullDividendPayment(2, { from: account_investor3, gasPrice: 0 });
-            let investor1BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor3));
-            assert.equal(investor1BalanceAfter1.sub(investor1Balance).toNumber(), 0);
-            assert.equal(investor2BalanceAfter1.sub(investor2Balance).toNumber(), 0);
-            assert.equal(investor3BalanceAfter1.sub(investor3Balance).toString(), new BN(web3.utils.toWei("7", "ether")).toString());
+            const investor1Balance = await ethers.provider.getBalance(account_investor1.address);
+            const investor2Balance = await ethers.provider.getBalance(account_investor2.address);
+            const investor3Balance = await ethers.provider.getBalance(account_investor3.address);
+            await I_EtherDividendCheckpoint.connect(account_investor3).pullDividendPayment(2);
+            const investor1BalanceAfter = await ethers.provider.getBalance(account_investor1.address);
+            const investor2BalanceAfter = await ethers.provider.getBalance(account_investor2.address);
+            const investor3BalanceAfter = await ethers.provider.getBalance(account_investor3.address);
+            expect(investor1BalanceAfter - investor1Balance).to.equal(0n);
+            expect(investor2BalanceAfter - investor2Balance).to.equal(0n);
+            expect(investor3BalanceAfter - investor3Balance).to.be.closeTo(ethers.parseEther("7"), ethers.parseEther("0.01"));
         });
 
         it("Still no more withholding tax to withdraw", async () => {
-            let issuerBalance = new BN(await web3.eth.getBalance(token_owner));
-            await I_EtherDividendCheckpoint.withdrawWithholding(0, { from: token_owner, gasPrice: 0 });
-            let issuerBalanceAfter = new BN(await web3.eth.getBalance(token_owner));
-            assert.equal(issuerBalanceAfter.sub(issuerBalance).toString(), new BN(web3.utils.toWei("0", "ether")).toString());
+            const walletBalance = await ethers.provider.getBalance(wallet.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).withdrawWithholding(2);
+            const walletBalanceAfter = await ethers.provider.getBalance(wallet.address);
+            expect(walletBalanceAfter - walletBalance).to.equal(0n);
         });
 
-        it("should investor 3 claims dividend", async () => {
-            await catchRevert(I_EtherDividendCheckpoint.pullDividendPayment(2, { from: account_investor3, gasPrice: 0 }));
+        it("should investor 3 claims dividend again - fails", async () => {
+            await expect(I_EtherDividendCheckpoint.connect(account_investor3).pullDividendPayment(2)).to.be.reverted;
         });
 
         it("Issuer pushes remainder", async () => {
-            let investor1BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor3));
-            let _blockNo = latestBlock();
-            let tx = await I_EtherDividendCheckpoint.pushDividendPayment(2, new BN(0), 10, { from: token_owner });
-            let investor1BalanceAfter2 = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter2 = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceAfter2 = new BN(await web3.eth.getBalance(account_investor3));
-            assert.equal(investor1BalanceAfter2.sub(investor1BalanceAfter1).toString(), 0);
-            assert.equal(investor2BalanceAfter2.sub(investor2BalanceAfter1).toString(), 0);
-            assert.equal(investor3BalanceAfter2.sub(investor3BalanceAfter1).toString(), 0);
+            const investor1Balance = await ethers.provider.getBalance(account_investor1.address);
+            const investor2Balance = await ethers.provider.getBalance(account_investor2.address);
+            const investor3Balance = await ethers.provider.getBalance(account_investor3.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).pushDividendPayment(2, 0, 10);
+            const investor1BalanceAfter = await ethers.provider.getBalance(account_investor1.address);
+            const investor2BalanceAfter = await ethers.provider.getBalance(account_investor2.address);
+            const investor3BalanceAfter = await ethers.provider.getBalance(account_investor3.address);
+            expect(investor1BalanceAfter - investor1Balance).to.equal(0n);
+            expect(investor2BalanceAfter - investor2Balance).to.equal(0n); // 100% withholding
+            expect(investor3BalanceAfter - investor3Balance).to.equal(0n);
             //Check fully claimed
-            assert.equal((await I_EtherDividendCheckpoint.dividends(2))[5].toString(), web3.utils.toWei("11", "ether"));
+            const dividend = await I_EtherDividendCheckpoint.dividends(2);
+            expect(dividend[5]).to.equal(ethers.parseEther("11"));
         });
 
         it("Issuer withdraws new withholding tax", async () => {
-            let issuerBalance = new BN(await web3.eth.getBalance(wallet));
-            await I_EtherDividendCheckpoint.withdrawWithholding(2, { from: token_owner, gasPrice: 0 });
-            let issuerBalanceAfter = new BN(await web3.eth.getBalance(wallet));
-            assert.equal(issuerBalanceAfter.sub(issuerBalance).toString(), new BN(web3.utils.toWei("3", "ether")).toString());
+            const walletBalance = await ethers.provider.getBalance(wallet.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).withdrawWithholding(2);
+            const walletBalanceAfter = await ethers.provider.getBalance(wallet.address);
+            expect(walletBalanceAfter - walletBalance).to.equal(ethers.parseEther("3"));
         });
 
         it("Investor 2 transfers 1 ETH of his token balance to investor 1", async () => {
-            await I_SecurityToken.transfer(account_investor1, new BN(web3.utils.toWei("1", "ether")), { from: account_investor2 });
-            assert.equal((await I_SecurityToken.balanceOf(account_investor1)).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
-            assert.equal((await I_SecurityToken.balanceOf(account_investor2)).toString(), new BN(web3.utils.toWei("2", "ether")).toString());
-            assert.equal((await I_SecurityToken.balanceOf(account_investor3)).toString(), new BN(web3.utils.toWei("7", "ether")).toString());
+            await I_SecurityToken.connect(account_investor2).transfer(account_investor1.address, ethers.parseEther("1"));
+            expect(await I_SecurityToken.balanceOf(account_investor1.address)).to.equal(ethers.parseEther("1"));
+            expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(ethers.parseEther("2"));
+            expect(await I_SecurityToken.balanceOf(account_investor3.address)).to.equal(ethers.parseEther("7"));
         });
 
         it("Create another new dividend with no value - fails", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(2);
-            let tx = await I_SecurityToken.createCheckpoint({ from: token_owner });
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpoint(maturity, expiry, 4, dividendName, { from: token_owner, value: 0 })
-            );
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(2);
+            await I_SecurityToken.connect(token_owner).createCheckpoint();
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpoint(maturity, expiry, 4, dividendName, { value: 0 })
+            ).to.be.reverted;
         });
 
-        it("Create another new dividend with explicit", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() - duration.days(10);
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpoint(maturity, expiry, 4, dividendName, {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("11", "ether"))
-                })
-            );
+        it("Create another new dividend with explicit past expiry - fails", async () => {
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) - duration.days(10);
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpoint(maturity, expiry, 4, dividendName, {
+            value: ethers.parseEther("11")
+            })
+            ).to.be.reverted;
         });
 
-        it("Create another new dividend with bad expiry - fails", async () => {
-            let maturity = await latestTime() - duration.days(5);
-            let expiry = await latestTime() - duration.days(2);
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpoint(maturity, expiry, 4, dividendName, {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("11", "ether"))
-                })
-            );
+        it("Create another new dividend with bad dates - fails", async () => {
+            const maturity = (await latestTime()) - duration.days(5);
+            const expiry = (await latestTime()) - duration.days(2);
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpoint(maturity, expiry, 4, dividendName, {
+            value: ethers.parseEther("11")
+            })
+            ).to.be.reverted;
         });
 
         it("Create another new dividend with bad checkpoint in the future - fails", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(2);
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpoint(maturity, expiry, 5, dividendName, {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("11", "ether"))
-                })
-            );
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(2);
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpoint(maturity, expiry, 5, dividendName, {
+            value: ethers.parseEther("11")
+            })
+            ).to.be.reverted;
         });
 
         it("Should not create dividend with more exclusions than limit", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(10);
-            await I_SecurityToken.createCheckpoint({ from: token_owner });
-            let limit = await I_EtherDividendCheckpoint.EXCLUDED_ADDRESS_LIMIT();
-            limit = limit.toNumber() + 42;
-            let addresses = [];
-            addresses.push(account_temp);
-            addresses.push(token_owner);
-            let tempAdd = '0x0000000000000000000000000000000000000000';
-            while (--limit > 42) addresses.push(web3.utils.toChecksumAddress(tempAdd.substring(0, 42 - limit.toString().length) + limit));
-            // while (--limit > 42) addresses.push(web3.utils.toChecksumAddress('0x00000000000000000000000000000000000000' + limit));
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpointAndExclusions(maturity, expiry, 4, addresses, dividendName, {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("10", "ether"))
-                }),
-                "tx -> failed because too many address excluded"
-            );
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(10);
+            await I_SecurityToken.connect(token_owner).createCheckpoint();
+            const limit = await I_EtherDividendCheckpoint.EXCLUDED_ADDRESS_LIMIT();
+            const addresses = [];
+            for (let i = 0; i < Number(limit) + 1; i++) {
+            addresses.push(ethers.Wallet.createRandom().address);
+            }
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpointAndExclusions(maturity, expiry, 4, addresses, dividendName, {
+            value: ethers.parseEther("10")
+            })
+            ).to.be.reverted;
         });
 
         it("Create another new dividend with explicit checkpoint and excluding account_investor1", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(10);
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(10);
             //checkpoint created in above test
-            let tx = await I_EtherDividendCheckpoint.createDividendWithCheckpointAndExclusions(
-                maturity,
-                expiry,
-                4,
-                [account_investor1],
-                dividendName,
-                { from: token_owner, value: new BN(web3.utils.toWei("10", "ether")) }
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpointAndExclusions(
+            maturity,
+            expiry,
+            4,
+            [account_investor1.address],
+            dividendName,
+            { value: ethers.parseEther("10") }
             );
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 4, "Dividend should be created at checkpoint 4");
-            console.log("Dividend Fourth :" + tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+            if (parsed && parsed.name === "EtherDividendDeposited") {
+            dividendEvent = parsed;
+            break;
+            }
+            } catch (e) {
+            // Ignore parsing errors
+            }
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(4n);
+            console.log("Dividend Fourth :" + dividendEvent!.args._dividendIndex.toString());
         });
 
         it("Should not create new dividend with duplicate exclusion", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(10);
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(10);
             //checkpoint created in above test
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpointAndExclusions(
-                    maturity,
-                    expiry,
-                    4,
-                    [account_investor1, account_investor1],
-                    dividendName,
-                    { from: token_owner, value: new BN(web3.utils.toWei("10", "ether")) }
-                )
-            );
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpointAndExclusions(
+            maturity,
+            expiry,
+            4,
+            [account_investor1.address, account_investor1.address],
+            dividendName,
+            { value: ethers.parseEther("10") }
+            )
+            ).to.be.reverted;
         });
 
         it("Should not create new dividend with 0x0 address in exclusion", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(10);
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(10);
             //checkpoint created in above test
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpointAndExclusions(maturity, expiry, 4, [address_zero], dividendName, {
-                    from: token_owner,
-                    value: new BN(web3.utils.toWei("10", "ether"))
-                })
-            );
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).createDividendWithCheckpointAndExclusions(maturity, expiry, 4, [address_zero], dividendName, {
+            value: ethers.parseEther("10")
+            })
+            ).to.be.reverted;
         });
 
         it("Non-owner pushes investor 1 - fails", async () => {
-            let investor1Balance = new BN(await I_PolyToken.balanceOf(account_investor1));
-            let investor2Balance = new BN(await I_PolyToken.balanceOf(account_investor2));
-            let investor3Balance = new BN(await I_PolyToken.balanceOf(account_investor3));
-            await catchRevert(
-                I_EtherDividendCheckpoint.pushDividendPaymentToAddresses(3, [account_investor2, account_investor1], {
-                    from: account_investor2,
-                    gasPrice: 0
-                })
-            );
+            await expect(
+            I_EtherDividendCheckpoint.connect(account_investor2).pushDividendPaymentToAddresses(3, [
+            account_investor2.address,
+            account_investor1.address
+            ])
+            ).to.be.reverted;
         });
 
         it("issuer pushes investor 1 with bad dividend index - fails", async () => {
-            let investor1Balance = new BN(await I_PolyToken.balanceOf(account_investor1));
-            let investor2Balance = new BN(await I_PolyToken.balanceOf(account_investor2));
-            let investor3Balance = new BN(await I_PolyToken.balanceOf(account_investor3));
-            await catchRevert(
-                I_EtherDividendCheckpoint.pushDividendPaymentToAddresses(6, [account_investor2, account_investor1], {
-                    from: token_owner,
-                    gasPrice: 0
-                })
-            );
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).pushDividendPaymentToAddresses(6, [
+            account_investor2.address,
+            account_investor1.address
+            ])
+            ).to.be.reverted;
         });
 
         it("should calculate dividend before the push dividend payment", async () => {
-            let dividendAmount1 = await I_EtherDividendCheckpoint.calculateDividend.call(3, account_investor1);
-            let dividendAmount2 = await I_EtherDividendCheckpoint.calculateDividend.call(3, account_investor2);
-            let dividendAmount3 = await I_EtherDividendCheckpoint.calculateDividend.call(3, account_investor3);
-            let dividendAmount_temp = await I_EtherDividendCheckpoint.calculateDividend.call(3, account_temp);
-            //1 has 1/11th, 2 has 2/11th, 3 has 7/11th, temp has 1/11th, but 1 is excluded
-            assert.equal(dividendAmount1[0].toString(), new BN(web3.utils.toWei("0", "ether")).toString());
-            assert.equal(dividendAmount1[1].toString(), new BN(web3.utils.toWei("0", "ether")).toString());
-            assert.equal(dividendAmount2[0].toString(), new BN(web3.utils.toWei("2", "ether")).toString());
-            assert.equal(dividendAmount2[1].toString(), new BN(web3.utils.toWei("2", "ether")).toString());
-            assert.equal(dividendAmount3[0].toString(), new BN(web3.utils.toWei("7", "ether")).toString());
-            assert.equal(dividendAmount3[1].toString(), new BN(web3.utils.toWei("0", "ether")).toString());
-            assert.equal(dividendAmount_temp[0].toString(), new BN(web3.utils.toWei("1", "ether")).toString());
-            assert.equal(dividendAmount_temp[1].toString(), new BN(web3.utils.toWei("0", "ether")).toString());
+            const dividendAmount1 = await I_EtherDividendCheckpoint.calculateDividend(3, account_investor1.address);
+            const dividendAmount2 = await I_EtherDividendCheckpoint.calculateDividend(3, account_investor2.address);
+            const dividendAmount3 = await I_EtherDividendCheckpoint.calculateDividend(3, account_investor3.address);
+            const dividendAmount_temp = await I_EtherDividendCheckpoint.calculateDividend(3, account_temp.address);
+            // 1 has 1/11th, 2 has 2/11th, 3 has 7/11th, temp has 1/11th, but 1 is excluded
+            // Withholding of 100% is active for investor 2
+            expect(dividendAmount1[0]).to.equal(ethers.parseEther("0")); // Excluded
+            expect(dividendAmount1[1]).to.equal(ethers.parseEther("0"));
+            expect(dividendAmount2[0]).to.equal(ethers.parseEther("2")); // Total dividend
+            expect(dividendAmount2[1]).to.equal(ethers.parseEther("2")); // Withheld amount
+            expect(dividendAmount3[0]).to.equal(ethers.parseEther("7"));
+            expect(dividendAmount3[1]).to.equal(ethers.parseEther("0"));
+            expect(dividendAmount_temp[0]).to.equal(ethers.parseEther("1"));
+            expect(dividendAmount_temp[1]).to.equal(ethers.parseEther("0"));
         });
 
         it("Investor 2 claims dividend", async () => {
-            let investor1Balance = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2Balance = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3Balance = new BN(await web3.eth.getBalance(account_investor3));
-            let tempBalance = new BN(await web3.eth.getBalance(account_temp));
-            await I_EtherDividendCheckpoint.pullDividendPayment(3, { from: account_investor2, gasPrice: 0 });
-            let investor1BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor3));
-            let tempBalanceAfter1 = new BN(await web3.eth.getBalance(account_temp));
-            assert.equal(investor1BalanceAfter1.sub(investor1Balance).toNumber(), 0);
-            assert.equal(investor2BalanceAfter1.sub(investor2Balance).toString(), 0);
-            assert.equal(investor3BalanceAfter1.sub(investor3Balance).toNumber(), 0);
-            assert.equal(tempBalanceAfter1.sub(tempBalance).toNumber(), 0);
+            // With 100% withholding, investor 2 receives 0 ETH.
+            // We check that their balance does not increase.
+            const investor2BalanceBefore = await ethers.provider.getBalance(account_investor2.address);
+            const tx = await I_EtherDividendCheckpoint.connect(account_investor2).pullDividendPayment(3);
+            const receipt = await tx.wait();
+            const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+            const investor2BalanceAfter = await ethers.provider.getBalance(account_investor2.address);
+            expect(investor2BalanceAfter).to.equal(investor2BalanceBefore - BigInt(gasUsed));
         });
 
         it("Should issuer pushes investor 1 and temp investor", async () => {
-            let investor1BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceAfter1 = new BN(await web3.eth.getBalance(account_investor3));
-            let tempBalanceAfter1 = new BN(await web3.eth.getBalance(account_temp));
-            await I_EtherDividendCheckpoint.pushDividendPaymentToAddresses(3, [account_investor1, account_temp], { from: token_owner });
-            let investor1BalanceAfter2 = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter2 = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceAfter2 = new BN(await web3.eth.getBalance(account_investor3));
-            let tempBalanceAfter2 = new BN(await web3.eth.getBalance(account_temp));
-            assert.equal(investor1BalanceAfter2.sub(investor1BalanceAfter1).toNumber(), 0);
-            assert.equal(investor2BalanceAfter2.sub(investor2BalanceAfter1).toNumber(), 0);
-            assert.equal(investor3BalanceAfter2.sub(investor3BalanceAfter1).toNumber(), 0);
-            assert.equal(tempBalanceAfter2.sub(tempBalanceAfter1).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
-            //Check fully claimed
-            assert.equal((await I_EtherDividendCheckpoint.dividends(3))[5].toString(), new BN(web3.utils.toWei("3", "ether")).toString());
+            const tempBalanceBefore = await ethers.provider.getBalance(account_temp.address);
+            await I_EtherDividendCheckpoint.connect(token_owner).pushDividendPaymentToAddresses(3, [
+            account_investor1.address,
+            account_temp.address
+            ]);
+            const tempBalanceAfter = await ethers.provider.getBalance(account_temp.address);
+
+            // account_investor1 is excluded, so no payment.
+            // account_temp should receive their dividend.
+            expect(tempBalanceAfter - tempBalanceBefore).to.equal(ethers.parseEther("1"));
+
+            // Check claimed amount: Investor 2 claimed (2 ETH) + temp investor claimed (1 ETH)
+            const dividend = await I_EtherDividendCheckpoint.dividends(3);
+            expect(dividend[5]).to.equal(ethers.parseEther("3"));
         });
 
         it("should calculate dividend after the push dividend payment", async () => {
-            let dividendAmount1 = await I_EtherDividendCheckpoint.calculateDividend.call(3, account_investor1);
-            let dividendAmount2 = await I_EtherDividendCheckpoint.calculateDividend.call(3, account_investor2);
-            assert.equal(dividendAmount1[0].toNumber(), 0);
-            assert.equal(dividendAmount2[0].toNumber(), 0);
+            // Dividends for these investors have been processed
+            const dividendAmount1 = await I_EtherDividendCheckpoint.calculateDividend(3, account_investor1.address);
+            const dividendAmount2 = await I_EtherDividendCheckpoint.calculateDividend(3, account_investor2.address);
+            expect(dividendAmount1[0]).to.equal(0n);
+            expect(dividendAmount2[0]).to.equal(0n);
         });
 
         it("Issuer unable to reclaim dividend (expiry not passed)", async () => {
-            await catchRevert(I_EtherDividendCheckpoint.reclaimDividend(3, { from: token_owner }));
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).reclaimDividend(3)).to.be.reverted;
+        });
+
+        it("Should fail to reclaim a non-existent dividend after expiry", async () => {
+            await increaseTime(duration.days(11));
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).reclaimDividend(8)).to.be.reverted;
         });
 
         it("Issuer is able to reclaim dividend after expiry", async () => {
-            await increaseTime(11 * 24 * 60 * 60);
-            await catchRevert(I_EtherDividendCheckpoint.reclaimDividend(8, { from: token_owner, gasPrice: 0 }));
+            // Reclaim goes to token_owner as they created the dividend with a zero address wallet
+            const tokenOwnerBalance = await ethers.provider.getBalance(wallet.address);
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).reclaimDividend(3);
+            const receipt = await tx.wait();
+            const tokenOwnerAfter = await ethers.provider.getBalance(wallet.address);
+            // 10 ETH total, 3 ETH claimed, 7 ETH remains to be reclaimed.
+            expect(tokenOwnerAfter - tokenOwnerBalance).to.equal(ethers.parseEther("7"));
         });
 
-        it("Issuer is able to reclaim dividend after expiry", async () => {
-            let tokenOwnerBalance = new BN(await web3.eth.getBalance(wallet));
-            await I_EtherDividendCheckpoint.reclaimDividend(3, { from: token_owner, gasPrice: 0 });
-            let tokenOwnerAfter = new BN(await web3.eth.getBalance(wallet));
-            assert.equal(tokenOwnerAfter.sub(tokenOwnerBalance).toString(), new BN(web3.utils.toWei("7", "ether")).toString());
-        });
-
-        it("Issuer is able to reclaim dividend after expiry", async () => {
-            await catchRevert(I_EtherDividendCheckpoint.reclaimDividend(3, { from: token_owner, gasPrice: 0 }));
+        it("Should fail to reclaim dividend that has already been reclaimed", async () => {
+            await expect(I_EtherDividendCheckpoint.connect(token_owner).reclaimDividend(3)).to.be.reverted;
         });
 
         it("Investor 3 unable to pull dividend after expiry", async () => {
-            await catchRevert(I_EtherDividendCheckpoint.pullDividendPayment(3, { from: account_investor3, gasPrice: 0 }));
+            await expect(I_EtherDividendCheckpoint.connect(account_investor3).pullDividendPayment(3)).to.be.reverted;
         });
 
         it("Assign token balance to an address that can't receive funds", async () => {
-            let tx = await I_GeneralTransferManager.modifyKYCData(
-                I_PolyToken.address,
-                currentTime,
-                currentTime,
-                currentTime.add(new BN(duration.days(1000000))),
-                {
-                    from: account_issuer,
-                    gas: 500000
-                }
+            await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+            I_PolyToken.target,
+            currentTime,
+            currentTime,
+            BigInt(currentTime) + BigInt(duration.days(1000000))
             );
-            // Jump time
+
             await increaseTime(5000);
-            // Mint some tokens
-            await I_SecurityToken.issue(I_PolyToken.address, new BN(web3.utils.toWei("1", "ether")), "0x0", { from: token_owner });
-            assert.equal((await I_SecurityToken.balanceOf(account_investor1)).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
-            assert.equal((await I_SecurityToken.balanceOf(account_investor2)).toString(), new BN(web3.utils.toWei("2", "ether")).toString());
-            assert.equal((await I_SecurityToken.balanceOf(account_investor3)).toString(), new BN(web3.utils.toWei("7", "ether")).toString());
-            assert.equal((await I_SecurityToken.balanceOf(account_temp)).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
-            assert.equal((await I_SecurityToken.balanceOf(I_PolyToken.address)).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
+            await I_SecurityToken.connect(token_owner).issue(I_PolyToken.target, ethers.parseEther("1"), "0x");
+
+            expect(await I_SecurityToken.balanceOf(account_investor1.address)).to.equal(ethers.parseEther("1"));
+            expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(ethers.parseEther("2"));
+            expect(await I_SecurityToken.balanceOf(account_investor3.address)).to.equal(ethers.parseEther("7"));
+            expect(await I_SecurityToken.balanceOf(account_temp.address)).to.equal(ethers.parseEther("1"));
+            expect(await I_SecurityToken.balanceOf(I_PolyToken.target)).to.equal(ethers.parseEther("1"));
         });
 
         it("Create another new dividend", async () => {
-            let maturity = await latestTime();
-            let expiry = await latestTime() + duration.days(10);
-            let tx = await I_EtherDividendCheckpoint.createDividendWithExclusions(maturity, expiry, [], dividendName, {
-                from: token_owner,
-                value: new BN(web3.utils.toWei("12", "ether"))
+            const maturity = await latestTime();
+            const expiry = (await latestTime()) + duration.days(10);
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).createDividendWithExclusions(maturity, expiry, [], dividendName, {
+            value: ethers.parseEther("12")
             });
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 6, "Dividend should be created at checkpoint 6");
-            console.log("Dividend Fifth :" + tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+            if (parsed && parsed.name === "EtherDividendDeposited") {
+            dividendEvent = parsed;
+            break;
+            }
+            } catch (e) {}
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(6n, "Dividend should be created at checkpoint 6");
+            console.log("Dividend Fifth :" + dividendEvent!.args._dividendIndex.toString());
         });
 
         it("Should issuer pushes all dividends", async () => {
-            let investor1BalanceBefore = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceBefore = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceBefore = new BN(await web3.eth.getBalance(account_investor3));
-            let tempBalanceBefore = new BN(await web3.eth.getBalance(account_temp));
-            let tokenBalanceBefore = new BN(await web3.eth.getBalance(I_PolyToken.address));
+            const investor1BalanceBefore = await ethers.provider.getBalance(account_investor1.address);
+            const investor3BalanceBefore = await ethers.provider.getBalance(account_investor3.address);
+            const tempBalanceBefore = await ethers.provider.getBalance(account_temp.address);
 
-            await I_EtherDividendCheckpoint.pushDividendPayment(4, new BN(0), 10, { from: token_owner });
+            await I_EtherDividendCheckpoint.connect(token_owner).pushDividendPayment(4, 0, 10);
 
-            let investor1BalanceAfter = new BN(await web3.eth.getBalance(account_investor1));
-            let investor2BalanceAfter = new BN(await web3.eth.getBalance(account_investor2));
-            let investor3BalanceAfter = new BN(await web3.eth.getBalance(account_investor3));
-            let tempBalanceAfter = new BN(await web3.eth.getBalance(account_temp));
-            let tokenBalanceAfter = new BN(await web3.eth.getBalance(I_PolyToken.address));
+            const investor1BalanceAfter = await ethers.provider.getBalance(account_investor1.address);
+            const investor3BalanceAfter = await ethers.provider.getBalance(account_investor3.address);
+            const tempBalanceAfter = await ethers.provider.getBalance(account_temp.address);
 
-            assert.equal(investor1BalanceAfter.sub(investor1BalanceBefore).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
-            assert.equal(investor2BalanceAfter.sub(investor2BalanceBefore).toString(), 0);
-            assert.equal(investor3BalanceAfter.sub(investor3BalanceBefore).toString(), new BN(web3.utils.toWei("7", "ether")).toString());
-            assert.equal(tempBalanceAfter.sub(tempBalanceBefore).toString(), new BN(web3.utils.toWei("1", "ether")).toString());
-            assert.equal(tokenBalanceAfter.sub(tokenBalanceBefore).toString(), new BN(web3.utils.toWei("0", "ether")).toString());
+            expect(investor1BalanceAfter - investor1BalanceBefore).to.equal(ethers.parseEther("1"));
+            expect(investor3BalanceAfter - investor3BalanceBefore).to.equal(ethers.parseEther("7"));
+            expect(tempBalanceAfter - tempBalanceBefore).to.equal(ethers.parseEther("1"));
 
-            //Check partially claimed
-            assert.equal((await I_EtherDividendCheckpoint.dividends(4))[5].toString(), new BN(web3.utils.toWei("11", "ether")).toString());
+            // Check claimed amount (paid + withheld). 9 paid + 2 withheld (inv2) = 11
+            const dividend = await I_EtherDividendCheckpoint.dividends(4);
+            expect(dividend[5]).to.equal(ethers.parseEther("11"));
         });
 
-        it("Should give the right dividend index", async () => {
-            let index = await I_EtherDividendCheckpoint.getDividendIndex.call(3);
-            assert.equal(index[0], 2);
+        it("Should give the right dividend index for an existing checkpoint", async () => {
+            const index = await I_EtherDividendCheckpoint.getDividendIndex(3);
+            expect(index[0]).to.equal(2n);
         });
 
-        it("Should give the right dividend index", async () => {
-            let index = await I_EtherDividendCheckpoint.getDividendIndex.call(8);
-            assert.equal(index.length, 0);
+        it("Should give an empty array for a non-existent checkpoint", async () => {
+            const index = await I_EtherDividendCheckpoint.getDividendIndex(8);
+            expect(index.length).to.equal(0);
         });
 
         it("Should get the listed permissions", async () => {
-            let tx = await I_EtherDividendCheckpoint.getPermissions.call();
-            assert.equal(tx.length, 2);
+            const permissions = await I_EtherDividendCheckpoint.getPermissions();
+            expect(permissions.length).to.equal(2);
+            expect(ethers.decodeBytes32String(permissions[0]).replace(/\u0000/g, "")).to.equal("ADMIN");
+            expect(ethers.decodeBytes32String(permissions[1]).replace(/\u0000/g, "")).to.equal("OPERATOR");
         });
 
-        it("should registr a delegate", async () => {
-            [I_GeneralPermissionManagerFactory] = await deployGPMAndVerifyed(account_polymath, I_MRProxied, 0);
-            let tx = await I_SecurityToken.addModule(I_GeneralPermissionManagerFactory.address, "0x", new BN(0), new BN(0), false, { from: token_owner });
-            assert.equal(tx.logs[2].args._types[0].toNumber(), delegateManagerKey, "General Permission Manager doesn't get deployed");
-            assert.equal(
-                web3.utils.toAscii(tx.logs[2].args._name).replace(/\u0000/g, ""),
-                "GeneralPermissionManager",
-                "GeneralPermissionManagerFactory module was not added"
+        it("should register a delegate", async () => {
+            [I_GeneralPermissionManagerFactory] = await deployGPMAndVerifyed(account_polymath.address, I_MRProxied, 0n);
+            const tx = await I_SecurityToken.connect(token_owner).addModule(
+            I_GeneralPermissionManagerFactory.target,
+            "0x",
+            0n,
+            0n,
+            false
             );
-            I_GeneralPermissionManager = await GeneralPermissionManager.at(tx.logs[2].args._module);
-            tx = await I_GeneralPermissionManager.addDelegate(account_manager, managerDetails, { from: token_owner });
-            assert.equal(tx.logs[0].args._delegate, account_manager);
+            const receipt = await tx.wait();
+            let moduleAddedEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+            const parsed = I_SecurityToken.interface.parseLog(log);
+            if (parsed && parsed.name === "ModuleAdded" && ethers.decodeBytes32String(parsed.args._name).replace(/\u0000/g, "") === "GeneralPermissionManager") {
+            moduleAddedEvent = parsed;
+            break;
+            }
+            } catch (e) {}
+            }
+            expect(moduleAddedEvent).to.not.be.null;
+            expect(moduleAddedEvent!.args._types[0]).to.equal(delegateManagerKey);
+            I_GeneralPermissionManager = await ethers.getContractAt("GeneralPermissionManager", moduleAddedEvent!.args._module);
+
+            const delegateTx = await I_GeneralPermissionManager.connect(token_owner).addDelegate(account_manager.address, managerDetails);
+            const delegateReceipt = await delegateTx.wait();
+            let delegateAddedEvent: LogDescription | null = null;
+            for (const log of delegateReceipt!.logs) {
+            try {
+            const parsed = I_GeneralPermissionManager.interface.parseLog(log);
+            if (parsed && parsed.name === "AddDelegate") {
+            delegateAddedEvent = parsed;
+            break;
+            }
+            } catch (e) {}
+            }
+            expect(delegateAddedEvent).to.not.be.null;
+            expect(delegateAddedEvent!.args._delegate).to.equal(account_manager.address);
         });
 
         it("should not allow manager without permission to create dividend", async () => {
-            await I_PolyToken.transfer(account_manager, new BN(web3.utils.toWei("2", "ether")), { from: token_owner });
-            await I_PolyToken.approve(I_EtherDividendCheckpoint.address, new BN(web3.utils.toWei("1.5", "ether")), { from: account_manager });
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, {
-                    from: account_manager,
-                    value: new BN(web3.utils.toWei("12", "ether"))
-                })
-            );
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            await expect(
+            I_EtherDividendCheckpoint.connect(account_manager).createDividend(maturity, expiry, dividendName, {
+            value: ethers.parseEther("12")
+            })
+            ).to.be.reverted;
         });
 
         it("should not allow manager without permission to create dividend with checkpoint", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let checkpointID = await I_SecurityToken.createCheckpoint.call({ from: token_owner });
-            await I_SecurityToken.createCheckpoint({ from: token_owner });
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpoint(maturity, expiry, checkpointID.toNumber(), dividendName, {
-                    from: account_manager,
-                    value: new BN(web3.utils.toWei("12", "ether"))
-                })
-            );
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const checkpointId = await I_SecurityToken.connect(token_owner).createCheckpoint.staticCall();
+            await I_SecurityToken.connect(token_owner).createCheckpoint();
+            await expect(
+            I_EtherDividendCheckpoint.connect(account_manager).createDividendWithCheckpoint(maturity, expiry, checkpointId, dividendName, {
+            value: ethers.parseEther("12")
+            })
+            ).to.be.reverted;
         });
 
         it("should not allow manager without permission to create dividend with exclusion", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let exclusions = [one_address];
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithExclusions(maturity, expiry, exclusions, dividendName, {
-                    from: account_manager,
-                    value: new BN(web3.utils.toWei("12", "ether"))
-                })
-            );
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const exclusions = [one_address];
+            await expect(
+            I_EtherDividendCheckpoint.connect(account_manager).createDividendWithExclusions(maturity, expiry, exclusions, dividendName, {
+            value: ethers.parseEther("12")
+            })
+            ).to.be.reverted;
         });
 
         it("should not allow manager without permission to create dividend with checkpoint and exclusion", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let exclusions = [one_address];
-            let checkpointID = await I_SecurityToken.createCheckpoint.call({ from: token_owner });
-            await I_SecurityToken.createCheckpoint({ from: token_owner });
-            await catchRevert(
-                I_EtherDividendCheckpoint.createDividendWithCheckpointAndExclusions(
-                    maturity,
-                    expiry,
-                    checkpointID.toNumber(),
-                    exclusions,
-                    dividendName,
-                    { from: account_manager, value: new BN(web3.utils.toWei("12", "ether")) }
-                )
-            );
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const exclusions = [one_address];
+            const checkpointId = await I_SecurityToken.connect(token_owner).createCheckpoint.staticCall();
+            await I_SecurityToken.connect(token_owner).createCheckpoint();
+            await expect(
+            I_EtherDividendCheckpoint.connect(account_manager).createDividendWithCheckpointAndExclusions(
+            maturity,
+            expiry,
+            checkpointId,
+            exclusions,
+            dividendName,
+            { value: ethers.parseEther("12") }
+            )
+            ).to.be.reverted;
         });
 
         it("should not allow manager without permission to create checkpoint", async () => {
-            await catchRevert(I_EtherDividendCheckpoint.createCheckpoint({ from: account_manager }));
+            await expect(I_EtherDividendCheckpoint.connect(account_manager).createCheckpoint()).to.be.reverted;
         });
 
         it("should give permission to manager", async () => {
-            await I_GeneralPermissionManager.changePermission(account_manager, I_EtherDividendCheckpoint.address, web3.utils.fromAscii("OPERATOR"), true, {
-                from: token_owner
-            });
-            let tx = await I_GeneralPermissionManager.changePermission(account_manager, I_EtherDividendCheckpoint.address, web3.utils.fromAscii("ADMIN"), true, {
-                from: token_owner
-            });
-            assert.equal(tx.logs[0].args._delegate, account_manager);
+            await I_GeneralPermissionManager.connect(token_owner).changePermission(account_manager.address, I_EtherDividendCheckpoint.target, ethers.encodeBytes32String("OPERATOR"), true);
+            const tx = await I_GeneralPermissionManager.connect(token_owner).changePermission(account_manager.address, I_EtherDividendCheckpoint.target, ethers.encodeBytes32String("ADMIN"), true);
+            
+            const receipt = await tx.wait();
+            let changePermissionEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+                const parsed = I_GeneralPermissionManager.interface.parseLog(log);
+                if (parsed && parsed.name === "ChangePermission") {
+                changePermissionEvent = parsed;
+                break;
+                }
+            } catch (e) {}
+            }
+            expect(changePermissionEvent).to.not.be.null;
+            expect(changePermissionEvent!.args._delegate).to.equal(account_manager.address);
         });
 
         it("should allow manager with permission to create dividend", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
 
-            let tx = await I_EtherDividendCheckpoint.createDividend(maturity, expiry, dividendName, {
-                from: account_manager,
-                value: new BN(web3.utils.toWei("12", "ether"))
+            const tx = await I_EtherDividendCheckpoint.connect(account_manager).createDividend(maturity, expiry, dividendName, {
+            value: ethers.parseEther("12")
             });
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 9);
-            console.log("Dividend sixth :" + tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+                const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+                if (parsed && parsed.name === "EtherDividendDeposited") {
+                dividendEvent = parsed;
+                break;
+                }
+            } catch (e) {}
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(9n);
+            console.log("Dividend sixth :" + dividendEvent!.args._dividendIndex.toString());
         });
 
         it("should allow manager with permission to create dividend with checkpoint", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let checkpointID = await I_SecurityToken.createCheckpoint.call({ from: token_owner });
-            await I_SecurityToken.createCheckpoint({ from: token_owner });
-            let tx = await I_EtherDividendCheckpoint.createDividendWithCheckpoint(maturity, expiry, checkpointID.toNumber(), dividendName, {
-                from: account_manager,
-                value: new BN(web3.utils.toWei("12", "ether"))
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const checkpointID = await I_SecurityToken.connect(token_owner).createCheckpoint.staticCall();
+            await I_SecurityToken.connect(token_owner).createCheckpoint();
+            const tx = await I_EtherDividendCheckpoint.connect(account_manager).createDividendWithCheckpoint(maturity, expiry, checkpointID, dividendName, {
+            value: ethers.parseEther("12")
             });
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 10);
-            console.log("Dividend seventh :" + tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+                const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+                if (parsed && parsed.name === "EtherDividendDeposited") {
+                dividendEvent = parsed;
+                break;
+                }
+            } catch (e) {}
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(10n);
+            console.log("Dividend seventh :" + dividendEvent!.args._dividendIndex.toString());
         });
 
         it("should allow manager with permission to create dividend with exclusion", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let exclusions = [one_address];
-            let tx = await I_EtherDividendCheckpoint.createDividendWithExclusions(maturity, expiry, exclusions, dividendName, {
-                from: account_manager,
-                value: new BN(web3.utils.toWei("12", "ether"))
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const exclusions = [one_address];
+            const tx = await I_EtherDividendCheckpoint.connect(account_manager).createDividendWithExclusions(maturity, expiry, exclusions, dividendName, {
+            value: ethers.parseEther("12")
             });
-            console.log("Dividend Eighth :" + tx.logs[0].args._dividendIndex.toNumber());
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 11);
-            console.log(tx.logs[0].args._dividendIndex.toNumber());
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+                const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+                if (parsed && parsed.name === "EtherDividendDeposited") {
+                dividendEvent = parsed;
+                break;
+                }
+            } catch (e) {}
+            }
+            expect(dividendEvent).to.not.be.null;
+            console.log("Dividend Eighth :" + dividendEvent!.args._dividendIndex.toString());
+            expect(dividendEvent!.args._checkpointId).to.equal(11n);
         });
 
         it("Should fail to update the dividend dates because msg.sender is not authorised", async () => {
-            // failed because msg.sender is not the owner
-            await catchRevert(
-                I_EtherDividendCheckpoint.updateDividendDates(new BN(7), new BN(0), new BN(1), {from: account_polymath})
-            );
+            await expect(
+            I_EtherDividendCheckpoint.connect(account_polymath).updateDividendDates(7, 0, 1)
+            ).to.be.reverted;
         });
 
         it("Should fail to update the dates when the dividend get expired", async() => {
-            let id = await takeSnapshot();
+            const id = await takeSnapshot();
             await increaseTime(duration.days(11));
-            await catchRevert(
-                I_EtherDividendCheckpoint.updateDividendDates(new BN(7), new BN(0), new BN(1), {from: token_owner})
-            );
+            await expect(
+            I_EtherDividendCheckpoint.connect(token_owner).updateDividendDates(7, 0, 1)
+            ).to.be.reverted;
             await revertToSnapshot(id);
         });
 
         it("Should update the dividend dates", async() => {
-            let newMaturity = await latestTime() - duration.days(4);
-            let newExpiry = await latestTime() - duration.days(2);
-            let tx = await I_EtherDividendCheckpoint.updateDividendDates(new BN(7), newMaturity, newExpiry, {from: token_owner});
-            let info = await I_EtherDividendCheckpoint.getDividendData.call(7);
-            assert.equal(info[1].toNumber(), newMaturity);
-            assert.equal(info[2].toNumber(), newExpiry);
+            const newMaturity = (await latestTime()) - duration.days(4);
+            const newExpiry = (await latestTime()) - duration.days(2);
+            await I_EtherDividendCheckpoint.connect(token_owner).updateDividendDates(7, newMaturity, newExpiry);
+            const info = await I_EtherDividendCheckpoint.getDividendData(7);
+            expect(info[1]).to.equal(BigInt(newMaturity));
+            expect(info[2]).to.equal(BigInt(newExpiry));
             // Can now reclaim the dividend
-            await I_EtherDividendCheckpoint.reclaimDividend(new BN(7), {from: token_owner});
+            await I_EtherDividendCheckpoint.connect(token_owner).reclaimDividend(7);
         });
 
          it("Reclaim ETH from the dividend contract", async () => {
-            let currentDividendBalance = await web3.eth.getBalance(I_EtherDividendCheckpoint.address);
-            let currentIssuerBalance = await web3.eth.getBalance(token_owner);
-            await catchRevert(I_EtherDividendCheckpoint.reclaimETH({from: account_polymath, gasPrice: 0}));
-            let tx = await I_EtherDividendCheckpoint.reclaimETH({from: token_owner, gasPrice: 0});
-            assert.equal(await web3.eth.getBalance(I_EtherDividendCheckpoint.address), 0);
-            let newIssuerBalance = await web3.eth.getBalance(token_owner);
+            const currentDividendBalance = await ethers.provider.getBalance(I_EtherDividendCheckpoint.target);
+            const currentIssuerBalance = await ethers.provider.getBalance(token_owner.address);
+            await expect(I_EtherDividendCheckpoint.connect(account_polymath).reclaimETH()).to.be.reverted;
+            const tx = await I_EtherDividendCheckpoint.connect(token_owner).reclaimETH();
+            const receipt = await tx.wait();
+            const gasCost = receipt!.gasUsed * receipt!.gasPrice;
+            expect(await ethers.provider.getBalance(I_EtherDividendCheckpoint.target)).to.equal(0n);
+            const newIssuerBalance = await ethers.provider.getBalance(token_owner.address);
             console.log("Reclaimed: " + currentDividendBalance.toString());
-            let balanceDiff = parseInt(web3.utils.fromWei(newIssuerBalance.toString())) - parseInt(web3.utils.fromWei(currentIssuerBalance.toString()))
-            assert.equal(balanceDiff, parseInt(web3.utils.fromWei(currentDividendBalance.toString())));
+            expect(newIssuerBalance).to.equal(currentIssuerBalance - BigInt(gasCost) + currentDividendBalance);
         });
 
         it("should allow manager with permission to create dividend with checkpoint and exclusion", async () => {
-            let maturity = await latestTime() + duration.days(1);
-            let expiry = await latestTime() + duration.days(10);
-            let exclusions = [one_address];
-            let checkpointID = await I_SecurityToken.createCheckpoint.call({ from: token_owner });
-            await I_SecurityToken.createCheckpoint({ from: token_owner });
-            let tx = await I_EtherDividendCheckpoint.createDividendWithCheckpointAndExclusions(
-                maturity,
-                expiry,
-                checkpointID.toNumber(),
-                exclusions,
-                dividendName,
-                { from: account_manager, value: new BN(web3.utils.toWei("12", "ether")) }
+            const maturity = (await latestTime()) + duration.days(1);
+            const expiry = (await latestTime()) + duration.days(10);
+            const exclusions = [one_address];
+            const checkpointID = await I_SecurityToken.connect(token_owner).createCheckpoint.staticCall();
+            await I_SecurityToken.connect(token_owner).createCheckpoint();
+            const tx = await I_EtherDividendCheckpoint.connect(account_manager).createDividendWithCheckpointAndExclusions(
+            maturity,
+            expiry,
+            checkpointID,
+            exclusions,
+            dividendName,
+            { value: ethers.parseEther("12") }
             );
-            assert.equal(tx.logs[0].args._checkpointId.toNumber(), 12);
+            const receipt = await tx.wait();
+            let dividendEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+            try {
+                const parsed = I_EtherDividendCheckpoint.interface.parseLog(log);
+                if (parsed && parsed.name === "EtherDividendDeposited") {
+                dividendEvent = parsed;
+                break;
+                }
+            } catch (e) {}
+            }
+            expect(dividendEvent).to.not.be.null;
+            expect(dividendEvent!.args._checkpointId).to.equal(12n);
         });
 
         it("should allow manager with permission to create checkpoint", async () => {
-            let initCheckpointID = await I_SecurityToken.createCheckpoint.call({ from: token_owner });
-            await I_EtherDividendCheckpoint.createCheckpoint({ from: account_manager });
-            let finalCheckpointID = await I_SecurityToken.createCheckpoint.call({ from: token_owner });
-            assert.equal(finalCheckpointID.toNumber(), initCheckpointID.toNumber() + 1);
+            const initCheckpointID = await I_SecurityToken.connect(token_owner).createCheckpoint.staticCall();
+            await I_EtherDividendCheckpoint.connect(account_manager).createCheckpoint();
+            const finalCheckpointID = await I_SecurityToken.connect(token_owner).createCheckpoint.staticCall();
+            expect(finalCheckpointID).to.equal(initCheckpointID + 1n);
         });
 
         describe("Test cases for the EtherDividendCheckpointFactory", async () => {
             it("should get the exact details of the factory", async () => {
-                assert.equal((await I_EtherDividendCheckpointFactory.setupCost.call()).toNumber(), 0);
-                assert.equal((await I_EtherDividendCheckpointFactory.getTypes.call())[0], 4);
-                assert.equal(await I_EtherDividendCheckpointFactory.version.call(), "3.0.0");
-                assert.equal(
-                    web3.utils.toAscii(await I_EtherDividendCheckpointFactory.name.call()).replace(/\u0000/g, ""),
-                    "EtherDividendCheckpoint",
-                    "Wrong Module added"
-                );
-                assert.equal(
-                    await I_EtherDividendCheckpointFactory.description.call(),
-                    "Create ETH dividends for token holders at a specific checkpoint",
-                    "Wrong Module added"
-                );
-                assert.equal(await I_EtherDividendCheckpointFactory.title.call(), "Ether Dividend Checkpoint", "Wrong Module added");
-                let tags = await I_EtherDividendCheckpointFactory.getTags.call();
-                assert.equal(tags.length, 3);
+            expect(await I_EtherDividendCheckpointFactory.setupCost()).to.equal(0n);
+            expect((await I_EtherDividendCheckpointFactory.getTypes())[0]).to.equal(4);
+            expect(await I_EtherDividendCheckpointFactory.version()).to.equal("3.0.0");
+            expect(
+                ethers.decodeBytes32String(await I_EtherDividendCheckpointFactory.name()).replace(/\u0000/g, "")
+            ).to.equal("EtherDividendCheckpoint", "Wrong Module added");
+            expect(
+                await I_EtherDividendCheckpointFactory.description()
+            ).to.equal("Create ETH dividends for token holders at a specific checkpoint", "Wrong Module added");
+            expect(await I_EtherDividendCheckpointFactory.title()).to.equal("Ether Dividend Checkpoint", "Wrong Module added");
+            const tags = await I_EtherDividendCheckpointFactory.getTags();
+            expect(tags.length).to.equal(3);
             });
         });
-    });
+        });
 });

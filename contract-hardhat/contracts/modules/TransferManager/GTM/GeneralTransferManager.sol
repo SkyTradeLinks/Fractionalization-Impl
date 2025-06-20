@@ -6,6 +6,7 @@ import "../../../libraries/Encoder.sol";
 import "../../../libraries/VersionUtils.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./GeneralTransferManagerStorage.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Transfer Manager module for core transfer validation functionality

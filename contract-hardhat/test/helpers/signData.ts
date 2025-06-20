@@ -1,30 +1,24 @@
 import { ethers } from "hardhat";
-import { BigNumber, solidityKeccak256, arrayify, AbiCoder, Wallet } from "ethers";
+import { solidityPackedKeccak256, Wallet } from "ethers";
 
 async function getSignSTMData(
     tmAddress: string,
-    nonce: string | number,
-    validFrom: string | number,
-    expiry: string | number,
-    fromAddress: string,
-    toAddress: string,
+    from: string,
+    to: string,
     amount: string | number,
+    validFrom: string | number,
+    validTo: string | number,
+    nonce: string | number,
     pk: string
 ): Promise<string> {
-    const hash = solidityKeccak256(
-        ['address', 'uint256', 'uint256', 'uint256', 'address', 'address', 'uint256'],
-        [tmAddress, BigNumber.from(nonce), BigNumber.from(validFrom), BigNumber.from(expiry), fromAddress, toAddress, BigNumber.from(amount)]
+    const hash = solidityPackedKeccak256(
+        ['address', 'address', 'address', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [tmAddress, from, to, amount, validFrom, validTo, nonce]
     );
 
     const wallet = new Wallet(pk);
-    const signature = await wallet.signMessage(arrayify(hash));
-
-    const abiCoder = new AbiCoder();
-    const data = abiCoder.encode(
-        ['address', 'uint256', 'uint256', 'uint256', 'bytes'],
-        [tmAddress, BigNumber.from(nonce), BigNumber.from(validFrom), BigNumber.from(expiry), signature]
-    );
-    return data;
+    const signature = await wallet.signMessage(ethers.getBytes(hash));
+    return signature;
 }
 
 async function getFreezeIssuanceAck(stAddress: string, from: string): Promise<string> {
@@ -77,7 +71,7 @@ async function getDisableControllerAck(stAddress: string, from: string): Promise
     };
 
     const signer = (await ethers.getSigners())[0];
-    const signature = await signer._signTypedData(domain, types, value);
+    const signature = await signer.signTypedData(domain, types, value);
     return signature;
 }
 
@@ -92,14 +86,14 @@ async function getSignGTMData(
     nonce: string | number,
     pk: string
 ): Promise<string> {
-    const hash = solidityKeccak256(
+    const hash = solidityPackedKeccak256(
         ['address', 'address', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'],
-        [tmAddress, investorAddress, BigNumber.from(fromTime), BigNumber.from(toTime), 
-         BigNumber.from(expiryTime), BigNumber.from(validFrom), BigNumber.from(validTo), BigNumber.from(nonce)]
+        [tmAddress, investorAddress, fromTime, toTime, 
+         expiryTime, validFrom, validTo, nonce]
     );
 
     const wallet = new Wallet(pk);
-    const signature = await wallet.signMessage(arrayify(hash));
+    const signature = await wallet.signMessage(ethers.getBytes(hash));
     return signature;
 }
 
@@ -122,24 +116,31 @@ async function getMultiSignGTMData(
     investorAddress: string | string[],
     fromTime: string | number | (string | number)[],
     toTime: string | number | (string | number)[],
-    expiryTime: string | number | (string | number)[],
+    expiryTime: string | number | bigint | (string | number | bigint)[],
     validFrom: string | number,
     validTo: string | number,
     nonce: string | number,
     pk: string
 ): Promise<string> {
-    const hash = solidityKeccak256(
+    const hash = solidityPackedKeccak256(
         ['address', 'address[]', 'uint256[]', 'uint256[]', 'uint256[]', 'uint256', 'uint256', 'uint256'],
         [tmAddress, Array.isArray(investorAddress) ? investorAddress : [investorAddress],
-         Array.isArray(fromTime) ? fromTime.map(t => BigNumber.from(t)) : [BigNumber.from(fromTime)],
-         Array.isArray(toTime) ? toTime.map(t => BigNumber.from(t)) : [BigNumber.from(toTime)],
-         Array.isArray(expiryTime) ? expiryTime.map(t => BigNumber.from(t)) : [BigNumber.from(expiryTime)],
-         BigNumber.from(validFrom), BigNumber.from(validTo), BigNumber.from(nonce)]
+         Array.isArray(fromTime) ? fromTime : [fromTime],
+         Array.isArray(toTime) ? toTime : [toTime],
+         Array.isArray(expiryTime) ? expiryTime : [expiryTime],
+         validFrom, validTo, nonce]
     );
 
     const wallet = new Wallet(pk);
-    const signature = await wallet.signMessage(arrayify(hash));
+    const signature = await wallet.signMessage(ethers.getBytes(hash));
     return signature;
+    // const flatSig = wallet.signingKey.sign(hash); // sign raw digest
+    // console.log("flatSig", flatSig.serialized);
+    // return flatSig.serialized; // same as web3's .signature
+    // const sig = wallet.signingKey.sign(hash);
+    // const signature = ethers.Signature.from(sig);
+    // console.log("signature", signature);
+    // return wallet.signingKey.sign(hash).serialized;
 }
 
 export {
