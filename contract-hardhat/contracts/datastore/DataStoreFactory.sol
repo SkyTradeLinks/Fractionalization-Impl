@@ -7,7 +7,7 @@ contract DataStoreFactory {
 
     address public implementation;
 
-    constructor(address _implementation) public {
+    constructor(address _implementation) {
         require(_implementation != address(0), "Address should not be 0x");
         implementation = _implementation;
     }

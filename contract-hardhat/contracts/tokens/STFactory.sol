@@ -7,10 +7,11 @@ import "../interfaces/ISTFactory.sol";
 import "../interfaces/ISecurityToken.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../interfaces/IOwnable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "../libraries/Ownable.sol";
 import "../interfaces/IModuleRegistry.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../datastore/DataStoreFactory.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Proxy for deploying SecurityToken instances
@@ -46,7 +47,6 @@ contract STFactory is ISTFactory, Ownable {
         address _logicContract,
         bytes memory _initializationData
     )
-    Ownable(msg.sender)
     {
         require(_logicContract != address(0), "Invalid Address");
         require(_transferManagerFactory != address(0), "Invalid Address");

@@ -77,7 +77,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
     // STO Configuration //
     ///////////////////////
 
-    constructor(address _securityToken, address _polyAddress) public Module(_securityToken, _polyAddress) {
+    constructor(address _securityToken, address _polyAddress) Module(_securityToken, _polyAddress) {
 
     }
 
