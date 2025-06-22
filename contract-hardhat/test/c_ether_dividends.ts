@@ -127,12 +127,6 @@ describe("EtherDividendCheckpoint", function() {
             I_STGetter
         ] = instances;
 
-        console.log("=== DEBUG INFO ===");
-        console.log("I_STRProxied address:", await I_STRProxied.getAddress());
-        console.log("I_STRProxied constructor name:", I_STRProxied.constructor.name);
-        console.log("Available functions:", Object.getOwnPropertyNames(I_STRProxied).filter(name => typeof I_STRProxied[name] === 'function'));
-        console.log("Has registerNewTicker:", typeof I_STRProxied.registerNewTicker);
-
         // Deploy EtherDividendCheckpoint factories
         [P_EtherDividendCheckpointFactory] = await deployEtherDividendAndVerifyed(
             account_polymath.address,

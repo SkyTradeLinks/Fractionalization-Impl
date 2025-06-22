@@ -1,302 +1,260 @@
-// import { duration, promisifyLogWatch, latestBlock } from "./helpers/utils";
-// import { encodeProxyCall } from "./helpers/encodeCall";
-// import { catchRevert } from "./helpers/exceptions";
-// import { setUpPolymathNetwork } from "./helpers/createInstances";
+import { ethers } from "hardhat";
+import { expect } from "chai";
+import { Contract } from "ethers";
+import { setUpPolymathNetwork } from "./helpers/createInstances";
 
-// const MockModuleRegistry = artifacts.require("./MockModuleRegistry.sol");
-// const OwnedUpgradeabilityProxy = artifacts.require("./OwnedUpgradeabilityProxy.sol");
-// const ModuleRegistryProxy = artifacts.require("./ModuleRegistryProxy.sol");
-// const ModuleRegistry = artifacts.require("./ModuleRegistry.sol");
-// const STFactory = artifacts.require("./STFactory.sol");
-// const SecurityToken = artifacts.require("./SecurityToken.sol");
-// const GeneralTransferManagerLogic = artifacts.require("./GeneralTransferManager.sol");
-// const GeneralTransferManagerFactory = artifacts.require("./GeneralTransferManagerFactory.sol");
-// const GeneralPermissionManagerFactory = artifacts.require("./GeneralPermissionManagerFactory.sol");
-// const GeneralPermissionManager = artifacts.require("./GeneralPermissionManager.sol");
-// const STGetter = artifacts.require("./STGetter.sol");
-// const DataStoreLogic = artifacts.require('./DataStore.sol');
-// const DataStoreFactory = artifacts.require('./DataStoreFactory.sol');
+// Helper to read storage
+const readStorage = async (address: string, slot: number) => {
+    return await ethers.provider.getStorageAt(address, slot);
+};
 
-// const Web3 = require("web3");
-// let BN = Web3.utils.BN;
-// const web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545")); // Hardcoded development port
+describe("ModuleRegistryProxy", () => {
+    // Contract instances
+    let I_SecurityTokenRegistry: Contract;
+    let I_SecurityTokenRegistryProxy: Contract;
+    let I_GeneralTransferManagerFactory: Contract;
+    let I_GeneralPermissionManagerfactory: Contract;
+    let I_GeneralPermissionManagerLogic: Contract;
+    let I_MockModuleRegistry: Contract;
+    let I_STFactory: Contract;
+    let I_PolymathRegistry: Contract;
+    let I_ModuleRegistryProxy: Contract;
+    let I_PolyToken: Contract;
+    let I_MRProxied: Contract;
+    let I_ModuleRegistry: Contract;
+    let I_FeatureRegistry: Contract;
+    let I_STRGetter: Contract;
+    let I_STGetter: Contract;
 
-// contract("ModuleRegistryProxy", async (accounts) => {
-//     let I_SecurityTokenRegistry;
-//     let I_SecurityTokenRegistryProxy;
-//     let I_GeneralTransferManagerFactory;
-//     let I_GeneralPermissionManagerfactory;
-//     let I_GeneralPermissionManagerLogic;
-//     let I_MockModuleRegistry;
-//     let I_STFactory;
-//     let I_PolymathRegistry;
-//     let I_ModuleRegistryProxy;
-//     let I_PolyToken;
-//     let I_STRProxied;
-//     let I_MRProxied;
-//     let I_SecurityToken;
-//     let I_ModuleRegistry;
-//     let I_FeatureRegistry;
-//     let I_STRGetter;
-//     let I_STGetter;
-//     let stGetter;
+    // Signers
+    let account_polymath;
+    let account_temp;
+    let token_owner;
+    let account_polymath_new;
 
-//     let account_polymath;
-//     let account_temp;
-//     let token_owner;
-//     let account_polymath_new;
+    // Constants
+    const address_zero = ethers.ZeroAddress;
 
-//     // Initial fee for ticker registry and security token registry
-//     const version = "1.0.0";
-//     const message = "Transaction Should Fail!";
-//     const address_zero = "0x0000000000000000000000000000000000000000";
-//     const one_address = "0x0000000000000000000000000000000000000001";
-//     // SecurityToken Details for funds raise Type ETH
-//     const name = "Team";
-//     const symbol = "SAP";
-//     const tokenDetails = "This is equity type of issuance";
-//     const decimals = 18;
+    before(async () => {
+        [account_polymath, account_temp, token_owner, account_polymath_new] = await ethers.getSigners();
 
-//     const transferManagerKey = 2;
-//     const MRProxyParameters = ["address", "address"];
+        // Step 1: Deploy the general PM ecosystem
+        let instances = await setUpPolymathNetwork(account_polymath.address, token_owner.address);
 
-//     async function readStorage(contractAddress, slot) {
-//         return await web3.eth.getStorageAt(contractAddress, slot);
-//     }
+        [
+            I_PolymathRegistry,
+            I_PolyToken,
+            I_FeatureRegistry,
+            I_ModuleRegistry,
+            I_ModuleRegistryProxy, // This will be replaced by a new deployment
+            I_MRProxied,
+            I_GeneralTransferManagerFactory,
+            I_STFactory,
+            I_SecurityTokenRegistry,
+            I_SecurityTokenRegistryProxy,
+            // I_STRProxied, // Not used in this file
+            I_STRGetter,
+            I_STGetter
+        ] = instances;
 
-//     before(async () => {
-//         account_polymath = accounts[0];
-//         account_temp = accounts[1];
-//         token_owner = accounts[2];
-//         account_polymath_new = accounts[3];
+        const ModuleRegistryProxyFactory = await ethers.getContractFactory("ModuleRegistryProxy");
+        I_ModuleRegistryProxy = await ModuleRegistryProxyFactory.connect(account_polymath).deploy();
 
-//        // Step 1: Deploy the genral PM ecosystem
-//        let instances = await setUpPolymathNetwork(account_polymath, token_owner);
+        const ModuleRegistryFactory = await ethers.getContractFactory("ModuleRegistry");
+        I_ModuleRegistry = await ModuleRegistryFactory.connect(account_polymath).deploy();
 
-//        [
-//            I_PolymathRegistry,
-//            I_PolyToken,
-//            I_FeatureRegistry,
-//            I_ModuleRegistry,
-//            I_ModuleRegistryProxy,
-//            I_MRProxied,
-//            I_GeneralTransferManagerFactory,
-//            I_STFactory,
-//            I_SecurityTokenRegistry,
-//            I_SecurityTokenRegistryProxy,
-//            I_STRProxied,
-//            I_STRGetter,
-//            I_STGetter
-//        ] = instances;
+        await I_PolymathRegistry.connect(account_polymath).changeAddress("ModuleRegistry", I_ModuleRegistryProxy.target);
 
-//         I_ModuleRegistryProxy = await ModuleRegistryProxy.new({from: account_polymath});
-//         I_ModuleRegistry = await ModuleRegistry.new({from: account_polymath });
+        // Printing all the contract addresses
+        console.log(`
+         --------------------- Polymath Network Smart Contracts: ---------------------
+         PolymathRegistry:                  ${I_PolymathRegistry.target}
+         SecurityTokenRegistryProxy:        ${I_SecurityTokenRegistryProxy.target}
+         SecurityTokenRegistry:             ${I_SecurityTokenRegistry.target}
+         ModuleRegistry:                    ${I_ModuleRegistry.target}
+         ModuleRegistryProxy:               ${I_ModuleRegistryProxy.target}
+         STFactory:                         ${I_STFactory.target}
+         GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.target}
+         -----------------------------------------------------------------------------
+         `);
+    });
 
-//         await I_PolymathRegistry.changeAddress("ModuleRegistry", I_ModuleRegistryProxy.address, { from: account_polymath });
+    describe("Attach the implementation address", async () => {
+        // Storage slots for OwnedUpgradeabilityProxy
+        // __version -- keccak256('org.zeppelinos.proxy.version') - 1 => 0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3 (pos 11 in truffle)
+        // __implementation -- keccak256('org.zeppelinos.proxy.implementation') - 1 => 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc (pos 12 in truffle)
+        const IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+        const VERSION_SLOT = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3";
 
-//         // Printing all the contract addresses
-//         console.log(`
-//          --------------------- Polymath Network Smart Contracts: ---------------------
-//          PolymathRegistry:                  ${I_PolymathRegistry.address}
-//          SecurityTokenRegistryProxy:        ${I_SecurityTokenRegistryProxy.address}
-//          SecurityTokenRegistry:             ${I_SecurityTokenRegistry.address}
-//          ModuleRegistry:                    ${I_ModuleRegistry.address}
-//          ModuleRegistryProxy:               ${I_ModuleRegistryProxy.address}
-//          STFactory:                         ${I_STFactory.address}
-//          GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.address}
-//          -----------------------------------------------------------------------------
-//          `);
-//     });
+        it("Should attach the MR implementation and version", async () => {
+            const moduleRegistryInterface = new ethers.Interface(["function initialize(address _polymathRegistry, address _owner)"]);
+            const bytesProxy = moduleRegistryInterface.encodeFunctionData("initialize", [I_PolymathRegistry.target, account_polymath.target]);
 
-//     describe("Attach the implementation address", async () => {
-//         // Storage
-//         // __version -- index 11
-//         // __implementation -- index 12
-//         // __upgradeabilityOwner -- index 13
+            await I_ModuleRegistryProxy.connect(account_polymath).upgradeToAndCall("1.0.0", I_ModuleRegistry.target, bytesProxy);
 
-//         it("Should attach the MR implementation and version", async () => {
-//             let bytesProxy = encodeProxyCall(MRProxyParameters, [I_PolymathRegistry.address, account_polymath]);
-//             await I_ModuleRegistryProxy.upgradeToAndCall("1.0.0", I_ModuleRegistry.address, bytesProxy, { from: account_polymath });
-//             let c = await OwnedUpgradeabilityProxy.at(I_ModuleRegistryProxy.address);
-//             assert.equal(await readStorage(c.address, 12), I_ModuleRegistry.address.toLowerCase());
-//             assert.equal(
-//                 web3.utils
-//                     .toAscii(await readStorage(c.address, 11))
-//                     .replace(/\u0000/g, "")
-//                     .replace(/\n/, ""),
-//                 "1.0.0"
-//             );
-//             I_MRProxied = await ModuleRegistry.at(I_ModuleRegistryProxy.address);
-//         });
+            const implementationAddress = await ethers.provider.getStorageAt(I_ModuleRegistryProxy.target, IMPLEMENTATION_SLOT);
+            const version = await ethers.provider.getStorageAt(I_ModuleRegistryProxy.target, VERSION_SLOT);
 
-//         it("Deploy the essential smart contracts", async () => {
-//             await I_MRProxied.updateFromRegistry({ from: account_polymath });
-//             // STEP 4: Deploy the GeneralTransferManagerFactory
+            expect(ethers.getAddress(implementationAddress)).to.equal(I_ModuleRegistry.target);
+            expect(ethers.toUtf8String(version).replace(/\0/g, "")).to.equal("1.0.0");
 
-//             let I_GeneralTransferManagerLogic = await GeneralTransferManagerLogic.new(
-//                 address_zero,
-//                 address_zero,
-//                 { from: account_polymath }
-//             );
+            I_MRProxied = await ethers.getContractAt("ModuleRegistry", I_ModuleRegistryProxy.target);
+        });
 
-//             let I_SecurityTokenLogic = await SecurityToken.new(
-//                 { from: account_polymath }
-//             );
+        it("Deploy the essential smart contracts", async () => {
+            await I_MRProxied.connect(account_polymath).updateFromRegistry();
 
-//             I_GeneralTransferManagerFactory = await GeneralTransferManagerFactory.new(new BN(0), I_GeneralTransferManagerLogic.address, I_PolymathRegistry.address, true, {
-//                 from: account_polymath
-//             });
+            const GeneralTransferManagerLogicFactory = await ethers.getContractFactory("GeneralTransferManager");
+            let I_GeneralTransferManagerLogic = await GeneralTransferManagerLogicFactory.deploy(address_zero, address_zero);
 
-//             assert.notEqual(
-//                 I_GeneralTransferManagerFactory.address.valueOf(),
-//                 address_zero,
-//                 "GeneralTransferManagerFactory contract was not deployed"
-//             );
 
-//             // Register the Modules with the ModuleRegistry contract
+            const SecurityTokenLogicFactory = await ethers.getContractFactory("SecurityToken");
+            let I_SecurityTokenLogic = await SecurityTokenLogicFactory.deploy();
 
-//             // (A) :  Register the GeneralTransferManagerFactory
-//             await I_MRProxied.registerModule(I_GeneralTransferManagerFactory.address, { from: account_polymath });
-//             await I_MRProxied.verifyModule(I_GeneralTransferManagerFactory.address, { from: account_polymath });
 
-//             // Step 3: Deploy the STFactory contract
-//             I_STGetter = await STGetter.new({from: account_polymath});
-//             let I_DataStoreLogic = await DataStoreLogic.new({ from: account_polymath });
-//             let I_DataStoreFactory = await DataStoreFactory.new(I_DataStoreLogic.address, { from: account_polymath });
-//             const tokenInitBytes = {
-//                 name: "initialize",
-//                 type: "function",
-//                 inputs: [
-//                     {
-//                         type: "address",
-//                         name: "_getterDelegate"
-//                     }
-//                 ]
-//             };
-//             let tokenInitBytesCall = web3.eth.abi.encodeFunctionCall(tokenInitBytes, [I_STGetter.address]);
-//             I_STFactory = await STFactory.new(I_PolymathRegistry.address, I_GeneralTransferManagerFactory.address, I_DataStoreFactory.address, "3.0.0", I_SecurityTokenLogic.address, tokenInitBytesCall, { from: account_polymath });
+            const GeneralTransferManagerFactory = await ethers.getContractFactory("GeneralTransferManagerFactory");
+            I_GeneralTransferManagerFactory = await GeneralTransferManagerFactory.deploy(0, I_GeneralTransferManagerLogic.address, I_PolymathRegistry.address, true);
 
-//             assert.notEqual(I_STFactory.address.valueOf(), address_zero, "STFactory contract was not deployed");
-//         });
 
-//         it("Verify the initialize data", async () => {
-//             assert.equal(
-//                 await I_MRProxied.getAddressValue.call(web3.utils.soliditySha3("owner")),
-//                 account_polymath,
-//                 "Should equal to right address"
-//             );
-//             assert.equal(await I_MRProxied.getAddressValue.call(web3.utils.soliditySha3("polymathRegistry")), I_PolymathRegistry.address);
-//         });
-//     });
+            expect(I_GeneralTransferManagerFactory.address).to.not.equal(address_zero, "GeneralTransferManagerFactory contract was not deployed");
 
-//     describe("Feed some data in storage", async () => {
-//         it("Register and verify the new module", async () => {
-//             I_GeneralPermissionManagerLogic = await GeneralPermissionManager.new("0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000", { from: account_polymath });
-//             I_GeneralPermissionManagerfactory = await GeneralPermissionManagerFactory.new(new BN(0), I_GeneralPermissionManagerLogic.address, I_PolymathRegistry.address, true, {
-//                 from: account_polymath
-//             });
+            await I_MRProxied.connect(account_polymath).registerModule(I_GeneralTransferManagerFactory.address);
+            await I_MRProxied.connect(account_polymath).verifyModule(I_GeneralTransferManagerFactory.address, true);
 
-//             assert.notEqual(
-//                 I_GeneralPermissionManagerfactory.address.valueOf(),
-//                 address_zero,
-//                 "GeneralPermissionManagerFactory contract was not deployed"
-//             );
+            const STGetterFactory = await ethers.getContractFactory("STGetter");
+            I_STGetter = await STGetterFactory.deploy();
 
-//             await I_MRProxied.registerModule(I_GeneralPermissionManagerfactory.address, { from: account_polymath });
-//             await I_MRProxied.verifyModule(I_GeneralPermissionManagerfactory.address, { from: account_polymath });
-//         });
-//     });
 
-//     describe("Upgrade the imlplementation address", async () => {
-//         it("Should upgrade the version and implementation address -- fail bad owner", async () => {
-//             I_MockModuleRegistry = await MockModuleRegistry.new({ from: account_polymath });
-//             await catchRevert(I_ModuleRegistryProxy.upgradeTo("1.1.0", I_MockModuleRegistry.address, { from: account_temp }));
-//         });
+            const DataStoreLogicFactory = await ethers.getContractFactory("DataStore");
+            let I_DataStoreLogic = await DataStoreLogicFactory.deploy();
 
-//         it("Should upgrade the version and implementation address -- Implementaion address should be a contract address", async () => {
-//             await catchRevert(I_ModuleRegistryProxy.upgradeTo("1.1.0", account_temp, { from: account_polymath }));
-//         });
 
-//         it("Should upgrade the version and implementation address -- Implemenation address should not be 0x", async () => {
-//             await catchRevert(
-//                 I_ModuleRegistryProxy.upgradeTo("1.1.0", address_zero, { from: account_polymath })
-//             );
-//         });
+            const DataStoreFactory = await ethers.getContractFactory("DataStoreFactory");
+            let I_DataStoreFactory = await DataStoreFactory.deploy(I_DataStoreLogic.address);
 
-//         it("Should upgrade the version and implementation address -- Implemenation address should not be the same address", async () => {
-//             await catchRevert(I_ModuleRegistryProxy.upgradeTo("1.1.0", I_ModuleRegistry.address, { from: account_polymath }));
-//         });
 
-//         it("Should upgrade the version and implementation address -- same version as previous is not allowed", async () => {
-//             await catchRevert(I_ModuleRegistryProxy.upgradeTo("1.0.0", I_MockModuleRegistry.address, { from: account_polymath }));
-//         });
+            const tokenInitInterface = new ethers.utils.Interface(["function initialize(address _getterDelegate)"]);
+            const tokenInitBytesCall = tokenInitInterface.encodeFunctionData("initialize", [I_STGetter.address]);
 
-//         it("Should upgrade the version and implementation address -- empty version string is not allowed", async () => {
-//             await catchRevert(I_ModuleRegistryProxy.upgradeTo("", I_MockModuleRegistry.address, { from: account_polymath }));
-//         });
+            const STFactory = await ethers.getContractFactory("STFactory");
+            I_STFactory = await STFactory.deploy(I_PolymathRegistry.address, I_GeneralTransferManagerFactory.address, I_DataStoreFactory.address, "3.0.0", I_SecurityTokenLogic.address, tokenInitBytesCall);
 
-//         it("Should upgrade the version and the implementation address successfully", async () => {
-//             await I_ModuleRegistryProxy.upgradeTo("1.1.0", I_MockModuleRegistry.address, { from: account_polymath });
-//             let c = await OwnedUpgradeabilityProxy.at(I_ModuleRegistryProxy.address);
-//             assert.equal(
-//                 web3.utils
-//                     .toAscii(await readStorage(c.address, 11))
-//                     .replace(/\u0000/g, "")
-//                     .replace(/\n/, ""),
-//                 "1.1.0",
-//                 "Version mis-match"
-//             );
-//             assert.equal(await readStorage(c.address, 12), I_MockModuleRegistry.address.toLowerCase(), "Implemnted address is not matched");
-//             I_MRProxied = await MockModuleRegistry.at(I_ModuleRegistryProxy.address);
-//         });
-//     });
 
-//     describe("Execute functionality of the implementation contract on the earlier storage", async () => {
-//         it("Should get the previous data", async () => {
-//             let _data = await I_MRProxied.getFactoryDetails.call(I_GeneralTransferManagerFactory.address);
-//             assert.equal(_data[2].length, new BN(0), "Should give the original length");
-//         });
+            expect(I_STFactory.address).to.not.equal(address_zero, "STFactory contract was not deployed");
+        });
 
-//         it("Should alter the old storage", async () => {
-//             await I_MRProxied.addMoreReputation(I_GeneralTransferManagerFactory.address, [account_polymath, account_temp], {
-//                 from: account_polymath
-//             });
-//             let _data = await I_MRProxied.getFactoryDetails.call(I_GeneralTransferManagerFactory.address);
-//             assert.equal(_data[2].length, 2, "Should give the updated length");
-//         });
-//     });
+        it("Verify the initialize data", async () => {
+            expect(await I_MRProxied.getAddressValue(ethers.utils.id("owner"))).to.equal(account_polymath.address);
+            expect(await I_MRProxied.getAddressValue(ethers.utils.id("polymathRegistry"))).to.equal(I_PolymathRegistry.address);
+        });
+    });
 
-//     describe("Transfer the ownership of the proxy contract", async () => {
-//         it("Should change the ownership of the contract -- because of bad owner", async () => {
-//             await catchRevert(I_ModuleRegistryProxy.transferProxyOwnership(account_polymath_new, { from: account_temp }));
-//         });
+    describe("Feed some data in storage", async () => {
+        it("Register and verify the new module", async () => {
+            const GPMFactory = await ethers.getContractFactory("GeneralPermissionManager");
+            I_GeneralPermissionManagerLogic = await GPMFactory.deploy(address_zero, address_zero);
 
-//         it("Should change the ownership of the contract -- new address should not be 0x", async () => {
-//             await catchRevert(
-//                 I_ModuleRegistryProxy.transferProxyOwnership(address_zero, { from: account_polymath })
-//             );
-//         });
 
-//         it("Should change the ownership of the contract", async () => {
-//             await I_ModuleRegistryProxy.transferProxyOwnership(account_polymath_new, { from: account_polymath });
-//             let _currentOwner = await I_ModuleRegistryProxy.proxyOwner.call({ from: account_polymath_new });
-//             assert.equal(_currentOwner, account_polymath_new, "Should equal to the new owner");
-//         });
+            const GPMFactoryFactory = await ethers.getContractFactory("GeneralPermissionManagerFactory");
+            I_GeneralPermissionManagerfactory = await GPMFactoryFactory.deploy(0, I_GeneralPermissionManagerLogic.address, I_PolymathRegistry.address, true);
 
-//         it("Should change the implementation contract and version by the new owner", async () => {
-//             I_ModuleRegistry = await ModuleRegistry.new({ from: account_polymath });
-//             await I_ModuleRegistryProxy.upgradeTo("1.2.0", I_ModuleRegistry.address, { from: account_polymath_new });
-//             let c = await OwnedUpgradeabilityProxy.at(I_ModuleRegistryProxy.address);
-//             assert.equal(
-//                 web3.utils
-//                     .toAscii(await readStorage(c.address, 11))
-//                     .replace(/\u0000/g, "")
-//                     .replace(/\n/, ""),
-//                 "1.2.0",
-//                 "Version mis-match"
-//             );
-//             assert.equal(await readStorage(c.address, 12), I_ModuleRegistry.address.toLowerCase(), "Implemnted address is not matched");
-//             I_MRProxied = await ModuleRegistry.at(I_ModuleRegistryProxy.address);
-//         });
-//     });
-// });
+
+            expect(I_GeneralPermissionManagerfactory.address).to.not.equal(address_zero, "GeneralPermissionManagerFactory contract was not deployed");
+
+            await I_MRProxied.connect(account_polymath).registerModule(I_GeneralPermissionManagerfactory.address);
+            await I_MRProxied.connect(account_polymath).verifyModule(I_GeneralPermissionManagerfactory.address, true);
+        });
+    });
+
+    describe("Upgrade the imlplementation address", async () => {
+        it("Should upgrade the version and implementation address -- fail bad owner", async () => {
+            const MockModuleRegistryFactory = await ethers.getContractFactory("MockModuleRegistry");
+            I_MockModuleRegistry = await MockModuleRegistryFactory.deploy();
+
+            await expect(I_ModuleRegistryProxy.connect(account_temp).upgradeTo("1.1.0", I_MockModuleRegistry.address)).to.be.reverted;
+        });
+
+        it("Should upgrade the version and implementation address -- Implementaion address should be a contract address", async () => {
+            await expect(I_ModuleRegistryProxy.connect(account_polymath).upgradeTo("1.1.0", account_temp.address)).to.be.reverted;
+        });
+
+        it("Should upgrade the version and implementation address -- Implemenation address should not be 0x", async () => {
+            await expect(I_ModuleRegistryProxy.connect(account_polymath).upgradeTo("1.1.0", address_zero)).to.be.reverted;
+        });
+
+        it("Should upgrade the version and implementation address -- Implemenation address should not be the same address", async () => {
+            await expect(I_ModuleRegistryProxy.connect(account_polymath).upgradeTo("1.1.0", I_ModuleRegistry.address)).to.be.reverted;
+        });
+
+        it("Should upgrade the version and implementation address -- same version as previous is not allowed", async () => {
+            await expect(I_ModuleRegistryProxy.connect(account_polymath).upgradeTo("1.0.0", I_MockModuleRegistry.address)).to.be.reverted;
+        });
+
+        it("Should upgrade the version and implementation address -- empty version string is not allowed", async () => {
+            await expect(I_ModuleRegistryProxy.connect(account_polymath).upgradeTo("", I_MockModuleRegistry.address)).to.be.reverted;
+        });
+
+        it("Should upgrade the version and the implementation address successfully", async () => {
+            await I_ModuleRegistryProxy.connect(account_polymath).upgradeTo("1.1.0", I_MockModuleRegistry.address);
+            
+            const IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+            const VERSION_SLOT = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3";
+            
+            const implementationAddress = await ethers.provider.getStorageAt(I_ModuleRegistryProxy.address, IMPLEMENTATION_SLOT);
+            const version = await ethers.provider.getStorageAt(I_ModuleRegistryProxy.address, VERSION_SLOT);
+
+            expect(ethers.utils.toUtf8String(version).replace(/\0/g, "")).to.equal("1.1.0", "Version mis-match");
+            expect(ethers.utils.getAddress(implementationAddress)).to.equal(I_MockModuleRegistry.address, "Implemnted address is not matched");
+            
+            I_MRProxied = await ethers.getContractAt("MockModuleRegistry", I_ModuleRegistryProxy.address);
+        });
+    });
+
+    describe("Execute functionality of the implementation contract on the earlier storage", async () => {
+        it("Should get the previous data", async () => {
+            let _data = await I_MRProxied.getFactoryDetails(I_GeneralTransferManagerFactory.address);
+            expect(_data[2].length).to.equal(0, "Should give the original length");
+        });
+
+        it("Should alter the old storage", async () => {
+            await I_MRProxied.connect(account_polymath).addMoreReputation(I_GeneralTransferManagerFactory.address, [account_polymath.address, account_temp.address]);
+            let _data = await I_MRProxied.getFactoryDetails(I_GeneralTransferManagerFactory.address);
+            expect(_data[2].length).to.equal(2, "Should give the updated length");
+        });
+    });
+
+    describe("Transfer the ownership of the proxy contract", async () => {
+        it("Should change the ownership of the contract -- because of bad owner", async () => {
+            await expect(I_ModuleRegistryProxy.connect(account_temp).transferProxyOwnership(account_polymath_new.address)).to.be.reverted;
+        });
+
+        it("Should change the ownership of the contract -- new address should not be 0x", async () => {
+            await expect(I_ModuleRegistryProxy.connect(account_polymath).transferProxyOwnership(address_zero)).to.be.reverted;
+        });
+
+        it("Should change the ownership of the contract", async () => {
+            await I_ModuleRegistryProxy.connect(account_polymath).transferProxyOwnership(account_polymath_new.address);
+            let _currentOwner = await I_ModuleRegistryProxy.connect(account_polymath_new).proxyOwner();
+            expect(_currentOwner).to.equal(account_polymath_new.address, "Should equal to the new owner");
+        });
+
+        it("Should change the implementation contract and version by the new owner", async () => {
+            const ModuleRegistryFactory = await ethers.getContractFactory("ModuleRegistry");
+            I_ModuleRegistry = await ModuleRegistryFactory.deploy();
+
+
+            await I_ModuleRegistryProxy.connect(account_polymath_new).upgradeTo("1.2.0", I_ModuleRegistry.address);
+            
+            const IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+            const VERSION_SLOT = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3";
+
+            const implementationAddress = await ethers.provider.getStorageAt(I_ModuleRegistryProxy.address, IMPLEMENTATION_SLOT);
+            const version = await ethers.provider.getStorageAt(I_ModuleRegistryProxy.address, VERSION_SLOT);
+
+            expect(ethers.utils.toUtf8String(version).replace(/\0/g, "")).to.equal("1.2.0", "Version mis-match");
+            expect(ethers.utils.getAddress(implementationAddress)).to.equal(I_ModuleRegistry.address, "Implemnted address is not matched");
+            
+            I_MRProxied = await ethers.getContractAt("ModuleRegistry", I_ModuleRegistryProxy.address);
+        });
+    });
+});

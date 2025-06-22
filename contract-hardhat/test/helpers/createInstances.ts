@@ -201,7 +201,6 @@ async function deploySTFactory(account_polymath: string): Promise<[STFactory, ST
     const TokenLibFactory = await ethers.getContractFactory("TokenLib");
         const tokenLib: TokenLib = await TokenLibFactory.deploy();
         await tokenLib.waitForDeployment();
-        console.log(tokenLib.target, "tokenLib");
 
     const STGetterFactory = await ethers.getContractFactory("STGetter", {
         libraries: {
@@ -209,7 +208,6 @@ async function deploySTFactory(account_polymath: string): Promise<[STFactory, ST
         },
         });
     I_STGetter = await STGetterFactory.deploy();
-    console.log("STGetter - " + I_STGetter.target);
 
     const SecurityTokenLogic = await ethers.getContractFactory("SecurityToken", {
         libraries: {

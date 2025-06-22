@@ -808,10 +808,10 @@ describe("GeneralTransferManager", function() {
             await catchRevert(I_SecurityToken.connect(account_investor1).transfer(account_investor2.address, ethers.parseEther("1")));
 
             // ERROR CASE: FAILING AT _executeTransfer
-            // await I_SecurityToken.connect(account_investor1).transferWithData(account_investor2.address, ethers.parseEther("1"), sig);
+            await I_SecurityToken.connect(account_investor1).transferWithData(account_investor2.address, ethers.parseEther("1"), sig);
             expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(ethers.parseEther("1"));
             //Should transfer even with invalid sig data when kyc not required
-            // await I_SecurityToken.connect(account_investor2).transferWithData(account_investor1.address, ethers.parseEther("1"), sig);
+            await I_SecurityToken.connect(account_investor2).transferWithData(account_investor1.address, ethers.parseEther("1"), sig);
             await revertToSnapshot(snap_id);
         });
 
@@ -1044,6 +1044,7 @@ describe("GeneralTransferManager", function() {
                 "0x" + token_owner_pk
             );
 
+            // ERROR: Invalid signature or data
             await I_GeneralTransferManager.connect(account_investor2).modifyKYCDataSigned(
                 account_investor2.address,
                 currentTime,
@@ -1064,8 +1065,8 @@ describe("GeneralTransferManager", function() {
         });
 
         it("Should set a budget for the GeneralTransferManager", async () => {
-            const budget = ethers.parseEther("10"); // 10 * 10^18
-            await I_SecurityToken.connect(token_owner).changeModuleBudget(I_GeneralTransferManager.target, budget, false);
+            const budget = ethers.parseEther("10");
+            await I_SecurityToken.connect(token_owner).changeModuleBudget(I_GeneralTransferManager.target, budget, true);
             await I_PolyToken.getTokens(budget, token_owner.address);
             await I_PolyToken.connect(token_owner).transfer(I_SecurityToken.target, budget);
         });
@@ -1073,10 +1074,10 @@ describe("GeneralTransferManager", function() {
         it("should allow authorized people to modify transfer requirements", async () => {
             await I_GeneralTransferManager.connect(token_owner).modifyTransferRequirements(0, false, true, false, false);
             let transferRestrictions = await I_GeneralTransferManager.transferRequirements(0);
-            expect(transferRestrictions.canSendAfter).to.be.false;
-            expect(transferRestrictions.canReceiveAfter).to.be.true;
-            expect(transferRestrictions.kyc).to.be.false;
-            expect(transferRestrictions.accredited).to.be.false;
+            expect(transferRestrictions[0]).to.be.false;
+            expect(transferRestrictions[1]).to.be.true;
+            expect(transferRestrictions[2]).to.be.false;
+            expect(transferRestrictions[3]).to.be.false;
         });
 
         it("should failed in trasfering the tokens", async () => {
@@ -1215,12 +1216,14 @@ describe("GeneralTransferManager", function() {
         })
 
         it("Should check the partition balance before changing the canSendAfter & canReceiveAfter", async() => {
+            // ERROR CASE: FAILING AT _executeTransfer
             expect(ethers.formatEther(await I_SecurityToken.balanceOf(account_investor2.address))).to.equal("1.0");
             
             expect(
             ethers.formatEther(await I_GeneralTransferManager.getTokensByPartition(ethers.encodeBytes32String("LOCKED"), account_investor2.address, 0n))
             ).to.equal("0.0");
             
+            // FAILING BECAUSE OF _executeTransfer test case
             expect(
             ethers.formatEther(await I_GeneralTransferManager.getTokensByPartition(ethers.encodeBytes32String("UNLOCKED"), account_investor2.address, 0n))
             ).to.equal("1.0");
@@ -1232,10 +1235,10 @@ describe("GeneralTransferManager", function() {
             let expiryTime = await latestTime() + duration.days(100);
 
             let tx = await I_GeneralTransferManager.connect(token_owner).modifyKYCData(
-            account_investor2.address,
-            canSendAfter,
-            canRecieveAfter,
-            expiryTime
+                account_investor2.address,
+                canSendAfter,
+                canRecieveAfter,
+                expiryTime
             );
             const receipt = await tx.wait();
             const kycEvent = receipt!.logs.map(log => {
@@ -1244,6 +1247,7 @@ describe("GeneralTransferManager", function() {
             
             expect(kycEvent!.args._investor).to.equal(account_investor2.address);
             
+            // ERROR CASE: FAILING AT _executeTransfer
             expect(
             ethers.formatEther(await I_GeneralTransferManager.getTokensByPartition(ethers.encodeBytes32String("LOCKED"), account_investor2.address, 0n))
             ).to.equal("1.0");
@@ -1260,6 +1264,7 @@ describe("GeneralTransferManager", function() {
             ethers.formatEther(await I_GeneralTransferManager.getTokensByPartition(ethers.encodeBytes32String("LOCKED"), account_investor2.address, 0n))
             ).to.equal("0.0");
 
+            // ERROR CASE: FAILING AT _executeTransfer
             expect(
             ethers.formatEther(await I_GeneralTransferManager.getTokensByPartition(ethers.encodeBytes32String("UNLOCKED"), account_investor2.address, 0n))
             ).to.equal("1.0");
