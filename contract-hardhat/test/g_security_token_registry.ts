@@ -1308,7 +1308,6 @@ describe("SecurityTokenRegistry", function() {
             );
         });
 
-        // FEE ISSUE
         it("Should be able to change the fee currency", async () => {
             let snapId = await takeSnapshot();
             const tickerFee = ethers.parseEther("500");
@@ -1335,15 +1334,15 @@ describe("SecurityTokenRegistry", function() {
             let tickerRegFeeValue = await I_STRProxied.getUintValue(ethers.keccak256(ethers.toUtf8Bytes("tickerRegFee")));
             assert.equal(tickerRegFeeValue.toString(), tickerFee.toString(), "wrong fee");
             
-            let tickerRegFeePoly = (await I_STRProxied.getFees("0x2fcc69711628630fb5a42566c68bd1092bc4aa26826736293969fddcd11cb2d2"));
+            let tickerRegFeePoly = (await I_STRProxied.getFees.staticCall("0x2fcc69711628630fb5a42566c68bd1092bc4aa26826736293969fddcd11cb2d2"));
             console.log(tickerRegFeePoly, "tickerRegFeePoly");
             assert.equal(tickerRegFeePoly[1], tickerRegFeeValue.toString());
 
             let stFeeValue = await I_STRProxied.getUintValue(ethers.keccak256(ethers.toUtf8Bytes("stLaunchFee")));
             assert.equal(stFeeValue.toString(), stFee.toString(), "wrong fee");
             
-            let stFeePoly = (await I_STRProxied.getFees("0xd677304bb45536bb7fdfa6b9e47a3c58fe413f9e8f01474b0a4b9c6e0275baf2"))[1];
-            assert.equal(stFeePoly.toString(), stFeeValue.toString());
+            let stFeePoly = (await I_STRProxied.getFees.staticCall("0xd677304bb45536bb7fdfa6b9e47a3c58fe413f9e8f01474b0a4b9c6e0275baf2"));
+            assert.equal(stFeePoly[1].toString(), stFeeValue.toString());
             
             await revertToSnapshot(snapId);
         });
@@ -1373,17 +1372,16 @@ describe("SecurityTokenRegistry", function() {
             assert.equal(event.args._newFee.toString(), newFee.toString());
             let tickerRegFee = await I_STRProxied.getUintValue(ethers.keccak256(ethers.toUtf8Bytes("tickerRegFee")));
             assert.equal(tickerRegFee.toString(), newFee.toString());
+            console.log(`Ticker registration fee changed to: ${newFee.toString()}`);
         });
 
         // FEE ISSUE
         it("Should fail to register the ticker with the old fee", async () => {
             await I_PolyToken.connect(token_owner).approve(I_STRProxied.target, initRegFeePOLY);
-            const tx = await I_STRProxied.connect(token_owner).registerNewTicker(token_owner.address, "POLY");
-            console.log(tx, "tx");
-            await catchRevert(
+            await expect(
                 I_STRProxied.connect(token_owner).registerNewTicker(token_owner.address, "POLY"),
                 "tx revert -> failed because of ticker registeration fee gets change"
-            );
+            ).to.be.reverted;
         });
 
         it("Should register the ticker with the new fee", async () => {

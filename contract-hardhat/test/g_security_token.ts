@@ -1217,7 +1217,7 @@ describe("SecurityToken", function() {
 
         it("Should fail to set controller because controller functionality frozen", async () => {
             await expect(
-            I_SecurityToken.connect(token_owner).setController(account_controller.address)
+                I_SecurityToken.connect(token_owner).setController(account_controller.address)
             ).to.be.reverted;
         });
 
@@ -1267,19 +1267,19 @@ describe("SecurityToken", function() {
             expiryTime = toTime + duration.days(100);
 
             let tx = await I_GeneralTransferManager.connect(token_owner).modifyKYCData(account_investor1.address, fromTime, toTime, expiryTime);
-            await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData").withArgs(account_investor1.address, fromTime, toTime, expiryTime);
+            await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData").withArgs(account_investor1.address, token_owner.address, fromTime, toTime, expiryTime);
 
             tx = await I_GeneralTransferManager.connect(token_owner).modifyKYCData(account_investor2.address, fromTime, toTime, expiryTime);
-            await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData").withArgs(account_investor2.address, fromTime, toTime, expiryTime);
+            await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData").withArgs(account_investor2.address, token_owner.address, fromTime, toTime, expiryTime);
 
             await increaseTime(5);
 
             let data = await I_SecurityToken.canTransferByPartition(
-            account_investor1.address,
-            account_investor2.address,
-            ethers.encodeBytes32String("LOCKED"),
-            ethers.parseEther("15"),
-            ethers.ZeroHash
+                account_investor1.address,
+                account_investor2.address,
+                ethers.encodeBytes32String("LOCKED"),
+                ethers.parseEther("15"),
+                ethers.ZeroHash
             );
 
             expect(data[0]).to.equal("0x50");

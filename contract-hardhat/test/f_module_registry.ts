@@ -567,7 +567,7 @@ describe("ModuleRegistry", function() {
                 });
 
                 it("Should successfully get the address", async () => {
-                    const _moduleR = await I_PolymathRegistry.getAddress("ModuleRegistry");
+                    const _moduleR = await I_PolymathRegistry.getAddressForTest("ModuleRegistry");
                     expect(_moduleR).to.equal(await I_ModuleRegistryProxy.getAddress());
                 });
             });
