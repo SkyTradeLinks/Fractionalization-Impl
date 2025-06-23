@@ -21,19 +21,42 @@ async function getSignSTMData(
     return signature;
 }
 
-async function getFreezeIssuanceAck(stAddress: string, from: string): Promise<string> {
+// async function getFreezeIssuanceAck(stAddress: string, from: string): Promise<string> {
+//     const domain = {
+//         name: 'Polymath',
+//         chainId: 1,
+//         verifyingContract: stAddress
+//     };
+
+//     const types = {
+//         EIP712Domain: [
+//             { name: 'name', type: 'string' },
+//             { name: 'chainId', type: 'uint256' },
+//             { name: 'verifyingContract', type: 'address' }
+//         ],
+//         Acknowledgment: [
+//             { name: 'text', type: 'string' }
+//         ]
+//     };
+
+//     const value = {
+//         text: 'I acknowledge that freezing Issuance is a permanent and irrevocable change'
+//     };
+
+//     const signer = (await ethers.getSigners())[0];
+//     const signature = await signer.signTypedData(domain, types, value);
+//     return signature;
+// }
+
+async function getFreezeIssuanceAck(stAddress: string, from: any): Promise<string> {
     const domain = {
         name: 'Polymath',
         chainId: 1,
         verifyingContract: stAddress
     };
 
+    // Remove EIP712Domain from types - ethers.js handles this automatically
     const types = {
-        EIP712Domain: [
-            { name: 'name', type: 'string' },
-            { name: 'chainId', type: 'uint256' },
-            { name: 'verifyingContract', type: 'address' }
-        ],
         Acknowledgment: [
             { name: 'text', type: 'string' }
         ]
@@ -43,12 +66,11 @@ async function getFreezeIssuanceAck(stAddress: string, from: string): Promise<st
         text: 'I acknowledge that freezing Issuance is a permanent and irrevocable change'
     };
 
-    const signer = (await ethers.getSigners())[0];
-    const signature = await signer.signTypedData(domain, types, value);
+    const signature = await from.signTypedData(domain, types, value);
     return signature;
 }
 
-async function getDisableControllerAck(stAddress: string, from: string): Promise<string> {
+async function getDisableControllerAck(stAddress: string, from: any): Promise<string> {
     const domain = {
         name: 'Polymath',
         chainId: 1,

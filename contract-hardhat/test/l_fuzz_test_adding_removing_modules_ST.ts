@@ -1,315 +1,274 @@
-// import latestTime from './helpers/latestTime';
-// import {signData} from './helpers/signData';
-// import { pk }  from './helpers/testprivateKey';
-// import { duration, promisifyLogWatch, latestBlock } from './helpers/utils';
-// import { takeSnapshot, increaseTime, revertToSnapshot } from './helpers/time';
-// import { catchRevert } from "./helpers/exceptions";
-// import { setUpPolymathNetwork,
-//          deployGPMAndVerifyed,
-//          deployCountTMAndVerifyed,
-//          deployLockUpTMAndVerified,
-//          deployPercentageTMAndVerified,
-//          deployManualApprovalTMAndVerifyed
-// } from "./helpers/createInstances";
-// import { encodeModuleCall } from "./helpers/encodeCall";
+import { assert, expect } from "chai";
+import { ethers, network } from "hardhat";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { Contract, ContractFactory, LogDescription } from "ethers";
 
-// const SecurityToken = artifacts.require('./SecurityToken.sol');
-// const GeneralTransferManager = artifacts.require('./GeneralTransferManager');
-// const GeneralPermissionManager = artifacts.require('./GeneralPermissionManager');
+import { latestTime } from './helpers/latestTime';
+import { pk } from './helpers/testprivateKey';
+import { duration, latestBlock } from './helpers/utils';
+import { takeSnapshot, revertToSnapshot } from './helpers/time';
+import { catchRevert } from "./helpers/exceptions";
+import { setUpPolymathNetwork, deployGPMAndVerifyed } from "./helpers/createInstances";
+import { encodeModuleCall } from "./helpers/encodeCall";
 
-// // modules for test
-// const CountTransferManager = artifacts.require("./CountTransferManager");
-// const ManualApprovalTransferManager = artifacts.require('./ManualApprovalTransferManager');
-// const VolumeRestrictionTransferManager = artifacts.require('./LockUpTransferManager');
-// const PercentageTransferManager = artifacts.require('./PercentageTransferManager');
-// const STGetter = artifacts.require("./STGetter.sol");
+describe('GeneralPermissionManager', function() {
 
+    // Accounts Variable declaration
+    let account_polymath: HardhatEthersSigner;
+    let account_issuer: HardhatEthersSigner;
+    let token_owner: HardhatEthersSigner;
+    let token_owner_pk: string;
+    let account_investor1: HardhatEthersSigner;
+    let account_investor2: HardhatEthersSigner;
+    let account_investor3: HardhatEthersSigner;
+    let account_investor4: HardhatEthersSigner;
+    let account_delegate: HardhatEthersSigner;
+    let accounts: HardhatEthersSigner[];
 
-// const Web3 = require('web3');
-// const BN = Web3.utils.BN;
-// const web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545")) // Hardcoded development port
+    // Contract Instance Declaration
+    let I_GeneralPermissionManagerFactory: any;
+    let P_GeneralPermissionManagerFactory: any;
+    let I_SecurityTokenRegistryProxy: any;
+    let P_GeneralPermissionManager: any;
+    let I_GeneralTransferManagerFactory: any;
+    let I_GeneralPermissionManager: any;
+    let I_GeneralTransferManager: any;
+    let I_ModuleRegistryProxy: any;
+    let I_ModuleRegistry: any;
+    let I_FeatureRegistry: any;
+    let I_SecurityTokenRegistry: any;
+    let I_DummySTOFactory: any;
+    let I_STFactory: any;
+    let I_SecurityToken: any;
+    let I_MRProxied: any;
+    let I_STRProxied: any;
+    let I_PolyToken: any;
+    let I_PolymathRegistry: any;
+    let I_STGetter: any;
+    let stGetter: any;
 
-// contract('GeneralPermissionManager', accounts => {
+    // SecurityToken Details
+    const name = "Team";
+    const symbol = "sap";
+    const tokenDetails = "This is equity type of issuance";
+    // Module key
+    const delegateManagerKey = 1;
 
-//     // Accounts Variable declaration
-//     let account_polymath;
-//     let account_issuer;
-//     let token_owner;
-//     let token_owner_pk;
-//     let account_investor1;
-//     let account_investor2;
-//     let account_investor3;
-//     let account_investor4;
-//     let account_delegate;
-//     let account_delegate2;
-//     // investor Details
-//     let fromTime = latestTime();
-//     let toTime = latestTime();
-//     let expiryTime = toTime + duration.days(15);
+    // Initial fee for ticker registry and security token registry
+    const initRegFee = ethers.parseEther("1000");
 
-//     let message = "Transaction Should Fail!";
+    let testRepeat = 20;
 
-//     // Contract Instance Declaration
-//     let I_GeneralPermissionManagerFactory;
-//     let P_GeneralPermissionManagerFactory;
-//     let I_SecurityTokenRegistryProxy;
-//     let P_GeneralPermissionManager;
-//     let I_GeneralTransferManagerFactory;
-//     let I_GeneralPermissionManager;
-//     let I_GeneralTransferManager;
-//     let I_ModuleRegistryProxy;
-//     let I_ModuleRegistry;
-//     let I_FeatureRegistry;
-//     let I_SecurityTokenRegistry;
-//     let I_DummySTOFactory;
-//     let I_STFactory;
-//     let I_SecurityToken;
-//     let I_MRProxied;
-//     let I_STRProxied;
-//     let I_PolyToken;
-//     let I_PolymathRegistry;
-//     let I_STGetter;
-//     let stGetter;
+    // define factories and modules for fuzz test
+    var factoriesAndModules = [
+        { factory: 'I_CountTransferManagerFactory', module: 'CountTransferManager'},
+        { factory: 'I_ManualApprovalTransferManagerFactory', module: 'ManualApprovalTransferManager'},
+        { factory: 'I_VolumeRestrictionTransferManagerFactory', module: 'VolumeRestrictionTransferManager'},
+        { factory: 'I_PercentageTransferManagerFactory', module: 'PercentageTransferManager'},
+    ];
 
+    let totalModules = factoriesAndModules.length;
+    let bytesSTO: any;
 
-//     //Define all modules for test
-//     let I_CountTransferManagerFactory;
-//     let I_CountTransferManager;
+    before(async () => {
+        // Get signers
+        accounts = await ethers.getSigners();
+        
+        // Accounts setup
+        account_polymath = accounts[0];
+        account_issuer = accounts[1];
 
-//     let I_ManualApprovalTransferManagerFactory;
-//     let I_ManualApprovalTransferManager;
+        token_owner = account_issuer;
+        token_owner_pk = pk.account_1;
 
-//     let I_VolumeRestrictionTransferManagerFactory;
-//     let I_VolumeRestrictionTransferManager;
+        account_investor1 = accounts[8];
+        account_investor2 = accounts[9];
+        account_investor3 = accounts[5];
+        account_investor4 = accounts[6];
+        account_delegate = accounts[7];
 
-//     let I_PercentageTransferManagerFactory;
-//     let I_PercentageTransferManager;
+        // Step 1: Deploy the genral PM ecosystem
+        let instances = await setUpPolymathNetwork(account_polymath.address, token_owner.address);
 
-//     // SecurityToken Details
-//     const name = "Team";
-//     const symbol = "sap";
-//     const tokenDetails = "This is equity type of issuance";
-//     const decimals = 18;
-//     const contact = "team@polymath.network";
-//     const delegateDetails = "Hello I am legit delegate";
-//     const STVRParameters = ["bool", "uint256", "bool"];
-//     const address_zero = "0x0000000000000000000000000000000000000000";
-//     // Module key
-//     const delegateManagerKey = 1;
-//     const transferManagerKey = 2;
-//     const stoKey = 3;
+        [
+            I_PolymathRegistry,
+            I_PolyToken,
+            I_FeatureRegistry,
+            I_ModuleRegistry,
+            I_ModuleRegistryProxy,
+            I_MRProxied,
+            I_GeneralTransferManagerFactory,
+            I_STFactory,
+            I_SecurityTokenRegistry,
+            I_SecurityTokenRegistryProxy,
+            I_STRProxied,
+            I_STGetter
+        ] = instances;
 
-//     // Initial fee for ticker registry and security token registry
-//     const initRegFee = web3.utils.toWei("1000");
+        // STEP 5: Deploy the GeneralDelegateManagerFactory
+        [I_GeneralPermissionManagerFactory] = await deployGPMAndVerifyed(account_polymath.address, I_MRProxied, 0);
+        // STEP 6: Deploy the GeneralDelegateManagerFactory
+        [P_GeneralPermissionManagerFactory] = await deployGPMAndVerifyed(account_polymath.address, I_MRProxied, ethers.parseEther("500"));
 
-// 	let _details = "details holding for test";
-//     let testRepeat = 20;
+        // Printing all the contract addresses
+        console.log(`
+        --------------------- Polymath Network Smart Contracts: ---------------------
+        PolymathRegistry:                  ${await I_PolymathRegistry.getAddress()}
+        SecurityTokenRegistryProxy:        ${await I_SecurityTokenRegistryProxy.getAddress()}
+        SecurityTokenRegistry:             ${await I_SecurityTokenRegistry.getAddress()}
+        ModuleRegistryProxy                ${await I_ModuleRegistryProxy.getAddress()}
+        ModuleRegistry:                    ${await I_ModuleRegistry.getAddress()}
+        FeatureRegistry:                   ${await I_FeatureRegistry.getAddress()}
 
-// 	// define factories and modules for fuzz test
-//     var factoriesAndModules = [
-//         { factory: 'I_CountTransferManagerFactory', module: 'CountTransferManager'},
-//         { factory: 'I_ManualApprovalTransferManagerFactory', module: 'ManualApprovalTransferManager'},
-//         { factory: 'I_VolumeRestrictionTransferManagerFactory', module: 'VolumeRestrictionTransferManager'},
-//         { factory: 'I_PercentageTransferManagerFactory', module: 'PercentageTransferManager'},
-//     ];
+        STFactory:                         ${await I_STFactory.getAddress()}
+        GeneralTransferManagerFactory:     ${await I_GeneralTransferManagerFactory.getAddress()}
+        GeneralPermissionManagerFactory:   ${await I_GeneralPermissionManagerFactory.getAddress()}
+        -----------------------------------------------------------------------------
+        `);
+    });
 
-//     let totalModules = factoriesAndModules.length;
-//     let bytesSTO;
+    describe("Generate the SecurityToken", async () => {
+        it("Should register the ticker before the generation of the security token", async () => {
+            await I_PolyToken.connect(token_owner).approve(await I_STRProxied.getAddress(), initRegFee);
+            let tx = await I_STRProxied.connect(token_owner).registerNewTicker(token_owner.address, symbol);
+            
+            const receipt = await tx.wait();
+            const fullReceipt = await ethers.provider.getTransactionReceipt(receipt!.hash);
+            const strProxiedAddress = await I_STRProxied.getAddress();
+        
+            const logs = fullReceipt!.logs.filter(log => 
+                log.address.toLowerCase() === strProxiedAddress.toLowerCase()
+            );
+        
+            let eventFound = false;
+            for (const log of logs) {
+                try {
+                    const parsed = I_STRProxied.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "RegisterTicker") { 
+                        assert.equal(parsed.args._owner, token_owner.address);
+                        assert.equal(parsed.args._ticker, symbol.toUpperCase());
+                        eventFound = true;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log: ${err.message}`);
+                }
+            }
+        
+            assert.equal(eventFound, true);
+        });
 
+        it("Should generate the new security token with the same symbol as registered above", async () => {
+            await I_PolyToken.connect(token_owner).approve(await I_STRProxied.getAddress(), initRegFee);
+            let tx = await I_STRProxied.connect(token_owner).generateNewSecurityToken(name, symbol, tokenDetails, false, token_owner.address, 0);
 
-//     before(async () => {
-//         // Accounts setup
-//         account_polymath = accounts[0];
-//         account_issuer = accounts[1];
+            const receipt = await tx.wait();
+            let securityTokenEvent: LogDescription | null = null;
 
-//         token_owner = account_issuer;
-//         token_owner_pk = pk.account_1;
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_STRProxied.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "NewSecurityToken") {
+                        securityTokenEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
 
-//         account_investor1 = accounts[8];
-//         account_investor2 = accounts[9];
-//         account_investor3 = accounts[5];
-//         account_investor4 = accounts[6];
-//         account_delegate = accounts[7];
-//         // account_delegate2 = accounts[6];
+            // Verify the successful generation of the security token
+            assert.equal(securityTokenEvent!.args._ticker, symbol.toUpperCase(), "SecurityToken doesn't get deployed");
 
+            I_SecurityToken = await ethers.getContractAt("SecurityToken", securityTokenEvent!.args._securityTokenAddress);
+            stGetter = await ethers.getContractAt("STGetter", await I_SecurityToken.getAddress());
+            assert.equal(await stGetter.getTreasuryWallet(), token_owner.address, "Incorrect wallet set");
+            
+            // Find ModuleAdded event in the logs
+            let moduleAddedEvent: LogDescription | null = null;
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_SecurityToken.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "ModuleAdded") {
+                        moduleAddedEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with SecurityToken: ${err.message}`);
+                }
+            }
 
-//         // Step 1: Deploy the genral PM ecosystem
-//         let instances = await setUpPolymathNetwork(account_polymath, token_owner);
+            // Verify that GeneralTransferManager module get added successfully or not
+            assert.equal(Number(moduleAddedEvent!.args._types[0]), 2);
+            const nameBytes32 = ethers.decodeBytes32String(moduleAddedEvent!.args._name).replace(/\u0000/g, '');
+            assert.equal(nameBytes32, "GeneralTransferManager");
+        });
 
-//         [
-//             I_PolymathRegistry,
-//             I_PolyToken,
-//             I_FeatureRegistry,
-//             I_ModuleRegistry,
-//             I_ModuleRegistryProxy,
-//             I_MRProxied,
-//             I_GeneralTransferManagerFactory,
-//             I_STFactory,
-//             I_SecurityTokenRegistry,
-//             I_SecurityTokenRegistryProxy,
-//             I_STRProxied,
-//             I_STGetter
-//         ] = instances;
+        it("Should initialize the auto attached modules", async () => {
+            const moduleData = (await stGetter.getModulesByType(2))[0];
+            I_GeneralTransferManager = await ethers.getContractAt("GeneralTransferManager", moduleData);
+        });
 
-//         // STEP 5: Deploy the GeneralDelegateManagerFactory
-//         [I_GeneralPermissionManagerFactory] = await deployGPMAndVerifyed(account_polymath, I_MRProxied, 0);
-//         // STEP 6: Deploy the GeneralDelegateManagerFactory
-//         [P_GeneralPermissionManagerFactory] = await deployGPMAndVerifyed(account_polymath, I_MRProxied, web3.utils.toWei("500"));
+        it("Should successfully attach the General permission manager factory with the security token -- failed because Token is not paid", async () => {
+            // Note: getTokens is a non-standard function, assuming it exists on the PolyToken contract for testing.
+            // The original test passed the signer object, but address is more common. Adjust if necessary.
+            await I_PolyToken.getTokens(ethers.parseEther("2000"), token_owner.address);
+            
+            const pGPMFactoryAddress = await P_GeneralPermissionManagerFactory.getAddress();
+            await expect(
+            I_SecurityToken.connect(token_owner).addModule(pGPMFactoryAddress, ethers.ZeroHash, ethers.parseEther("2000"), 0, false)
+            ).to.be.reverted;
+        });
 
-//         [I_CountTransferManagerFactory] = await deployCountTMAndVerifyed(account_polymath, I_MRProxied, 0);
+        it("Should successfully attach the General permission manager factory with the security token", async () => {
+            let snapId = await takeSnapshot();
+            const securityTokenAddress = await I_SecurityToken.getAddress();
+            await I_PolyToken.connect(token_owner).transfer(securityTokenAddress, ethers.parseEther("2000"));
+            
+            const pGPMFactoryAddress = await P_GeneralPermissionManagerFactory.getAddress();
+            const tx = await I_SecurityToken.connect(token_owner).addModule(
+            pGPMFactoryAddress,
+            ethers.ZeroHash,
+            ethers.parseEther("2000"),
+            0,
+            false
+            );
+            
+            const receipt = await tx.wait();
+            const moduleAddedEvent = receipt!.logs.map(log => {
+            try { return I_SecurityToken.interface.parseLog(log); } catch { return null; }
+            }).find((e): e is LogDescription => e !== null && e.name === 'ModuleAdded');
 
-// 	    // Deploy Modules
-//         [I_CountTransferManagerFactory] = await deployCountTMAndVerifyed(account_polymath, I_MRProxied, 0);
-//         [I_ManualApprovalTransferManagerFactory] = await deployManualApprovalTMAndVerifyed(account_polymath, I_MRProxied, 0);
-//         [I_VolumeRestrictionTransferManagerFactory] = await deployLockUpTMAndVerified(account_polymath, I_MRProxied, 0);
-//         [I_PercentageTransferManagerFactory] = await deployPercentageTMAndVerified(account_polymath, I_MRProxied, 0);
+            assert.isNotNull(moduleAddedEvent, "ModuleAdded event not found");
+            assert.equal(moduleAddedEvent!.args._types[0], delegateManagerKey, "General Permission Manager doesn't get deployed");
+            
+            const moduleName = ethers.decodeBytes32String(moduleAddedEvent!.args._name).replace(/\u0000/g, "");
+            assert.equal(moduleName, "GeneralPermissionManager", "GeneralPermissionManagerFactory module was not added");
+            
+            P_GeneralPermissionManager = await ethers.getContractAt("GeneralPermissionManager", moduleAddedEvent!.args._module);
+            await revertToSnapshot(snapId);
+        });
 
-//         // Printing all the contract addresses
-//         console.log(`
-//         --------------------- Polymath Network Smart Contracts: ---------------------
-//         PolymathRegistry:                  ${I_PolymathRegistry.address}
-//         SecurityTokenRegistryProxy:        ${I_SecurityTokenRegistryProxy.address}
-//         SecurityTokenRegistry:             ${I_SecurityTokenRegistry.address}
-//         ModuleRegistryProxy                ${I_ModuleRegistryProxy.address}
-//         ModuleRegistry:                    ${I_ModuleRegistry.address}
-//         FeatureRegistry:                   ${I_FeatureRegistry.address}
+        it("Should successfully attach the General permission manager factory with the security token", async () => {
+            const iGPMFactoryAddress = await I_GeneralPermissionManagerFactory.getAddress();
+            const tx = await I_SecurityToken.connect(token_owner).addModule(iGPMFactoryAddress, ethers.ZeroHash, 0, 0, false);
+            
+            const receipt = await tx.wait();
+            const moduleAddedEvent = receipt!.logs.map(log => {
+            try { return I_SecurityToken.interface.parseLog(log); } catch { return null; }
+            }).find((e): e is LogDescription => e !== null && e.name === 'ModuleAdded');
 
-//         STFactory:                         ${I_STFactory.address}
-//         GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.address}
-//         GeneralPermissionManagerFactory:   ${I_GeneralPermissionManagerFactory.address}
-//         -----------------------------------------------------------------------------
-//         `);
-//     });
+            assert.isNotNull(moduleAddedEvent, "ModuleAdded event not found");
+            assert.equal(moduleAddedEvent!.args._types[0], delegateManagerKey, "General Permission Manager doesn't get deployed");
+            
+            const moduleName = ethers.decodeBytes32String(moduleAddedEvent!.args._name).replace(/\u0000/g, "");
+            assert.equal(moduleName, "GeneralPermissionManager", "GeneralPermissionManagerFactory module was not added");
+            
+            I_GeneralPermissionManager = await ethers.getContractAt("GeneralPermissionManager", moduleAddedEvent!.args._module);
+        });
+        });
 
-//     describe("Generate the SecurityToken", async () => {
-//         it("Should register the ticker before the generation of the security token", async () => {
-//             await I_PolyToken.approve(I_STRProxied.address, initRegFee, { from: token_owner });
-//             let tx = await I_STRProxied.registerNewTicker(token_owner, symbol, { from: token_owner });
-//             assert.equal(tx.logs[0].args._owner, token_owner);
-//             assert.equal(tx.logs[0].args._ticker, symbol.toUpperCase());
-//         });
-
-//         it("Should generate the new security token with the same symbol as registered above", async () => {
-//             await I_PolyToken.approve(I_STRProxied.address, initRegFee, { from: token_owner });
-//             let _blockNo = latestBlock();
-//             let tx = await I_STRProxied.generateNewSecurityToken(name, symbol, tokenDetails, false, token_owner, 0, { from: token_owner });
-
-//             // Verify the successful generation of the security token
-//             assert.equal(tx.logs[1].args._ticker, symbol.toUpperCase(), "SecurityToken doesn't get deployed");
-
-//             I_SecurityToken = await SecurityToken.at(tx.logs[1].args._securityTokenAddress);
-//             stGetter = await STGetter.at(I_SecurityToken.address);
-//             assert.equal(await stGetter.getTreasuryWallet.call(), token_owner, "Incorrect wallet set");
-//             const log = (await I_SecurityToken.getPastEvents('ModuleAdded', {filter: {transactionHash: tx.transactionHash}}))[0];
-
-//             // Verify that GeneralTransferManager module get added successfully or not
-//             assert.equal(log.args._types[0].toNumber(), 2);
-//             assert.equal(web3.utils.toAscii(log.args._name).replace(/\u0000/g, ""), "GeneralTransferManager");
-//         });
-
-//         it("Should initialize the auto attached modules", async () => {
-//             let moduleData = (await stGetter.getModulesByType(2))[0];
-//             I_GeneralTransferManager = await GeneralTransferManager.at(moduleData);
-//         });
-
-//         it("Should successfully attach the General permission manager factory with the security token -- failed because Token is not paid", async () => {
-//             let errorThrown = false;
-//             await I_PolyToken.getTokens(web3.utils.toWei("2000", "ether"), token_owner);
-//             await catchRevert(
-//                 I_SecurityToken.addModule(P_GeneralPermissionManagerFactory.address, "0x0", web3.utils.toWei("2000", "ether"), 0, false, { from: token_owner })
-//             );
-//         });
-
-//         it("Should successfully attach the General permission manager factory with the security token", async () => {
-//             let snapId = await takeSnapshot();
-//             await I_PolyToken.transfer(I_SecurityToken.address, web3.utils.toWei("2000", "ether"), { from: token_owner });
-//             const tx = await I_SecurityToken.addModule(
-//                 P_GeneralPermissionManagerFactory.address,
-//                 "0x0",
-//                 web3.utils.toWei("2000", "ether"),
-//                 0,
-//                 false,
-//                 { from: token_owner }
-//             );
-//             assert.equal(tx.logs[3].args._types[0].toNumber(), delegateManagerKey, "General Permission Manager doesn't get deployed");
-//             assert.equal(
-//                 web3.utils.toAscii(tx.logs[3].args._name).replace(/\u0000/g, ""),
-//                 "GeneralPermissionManager",
-//                 "GeneralPermissionManagerFactory module was not added"
-//             );
-//             P_GeneralPermissionManager = await GeneralPermissionManager.at(tx.logs[3].args._module);
-//             await revertToSnapshot(snapId);
-//         });
-
-//         it("Should successfully attach the General permission manager factory with the security token", async () => {
-//             const tx = await I_SecurityToken.addModule(I_GeneralPermissionManagerFactory.address, "0x0", 0, 0, false, { from: token_owner });
-//             assert.equal(tx.logs[2].args._types[0].toNumber(), delegateManagerKey, "General Permission Manager doesn't get deployed");
-//             assert.equal(
-//                 web3.utils.toAscii(tx.logs[2].args._name).replace(/\u0000/g, ""),
-//                 "GeneralPermissionManager",
-//                 "GeneralPermissionManagerFactory module was not added"
-//             );
-//             I_GeneralPermissionManager = await GeneralPermissionManager.at(tx.logs[2].args._module);
-//         });
-//     });
-
-
-
-//     describe("adding and removing different modules", async () => {
-
-//         it("should pass test for randomly adding and removing modules ", async () => {
-
-//             console.log("1");
-//             // fuzz test loop over total times of testRepeat
-//             for (var i = 0; i < testRepeat; i++) {
-
-//                 console.log("1.2");
-
-//                 // choose a random module with in the totalMoudules available
-//                 let random = factoriesAndModules[Math.floor(Math.random() * Math.floor(totalModules))];
-//                 let randomFactory = eval(random.factory);
-//                 let randomModule = eval(random.module);
-//                 console.log("choosen factory "+ random.factory);
-//                 console.log("choosen module "+ random.module);
-
-//                 //calculate the data needed for different modules
-//                 if (random.module == 'CountTransferManager' ||  random.module == 'ManualApprovalTransferManager' || random.module == 'VolumeRestrictionTransferManager' ){
-//                     const holderCount = 2; // Maximum number of token holders
-//                     bytesSTO = encodeModuleCall(["uint256"], [holderCount]);
-//                 } else if (random.module == 'PercentageTransferManager'){
-//                     console.log("PTM 01");
-//                     const holderPercentage = new BN(web3.utils.toWei("0.7"));
-//                     bytesSTO = web3.eth.abi.encodeFunctionCall({
-//                         name: 'configure',
-//                         type: 'function',
-//                         inputs: [{
-//                             type: 'uint256',
-//                             name: '_maxHolderPercentage'
-//                         },{
-//                             type: 'bool',
-//                             name: '_allowPrimaryIssuance'
-//                         }
-//                         ]
-//                     }, [holderPercentage.toString(), false]);
-//                     console.log("encoded.");
-//                 } else {
-//                     console.log("no data defined for choosen module "+random.module);
-//                 }
-
-//                 // attach it to the ST
-//                 let tx = await I_SecurityToken.addModule(randomFactory.address, bytesSTO, 0, 0, false, { from: token_owner });
-//                 console.log("1.3");
-//                 let randomModuleInstance = await randomModule.at(tx.logs[2].args._module);
-//                 console.log("successfully attached module " + randomModuleInstance.address);
-
-//                 // remove it from the ST
-//                 tx = await I_SecurityToken.archiveModule(randomModuleInstance.address, { from: token_owner });
-//                 console.log("1.4");
-//                 tx = await I_SecurityToken.removeModule(randomModuleInstance.address, { from: token_owner });
-//                 console.log("successfully removed module " + randomModuleInstance.address);
-
-//             }
-//         })
-//     });
-
-// });
+    });

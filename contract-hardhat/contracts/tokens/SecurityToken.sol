@@ -444,11 +444,7 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     }
 
     function _transferWithData(address _from, address _to, uint256 _value, bytes memory _data) internal {
-        console.log("Transfer here");
-        console.logBytes(_data);
         _isValidTransfer(_updateTransfer(_from, _to, _value, _data));
-        console.log("Transfer here 1");
-        console.logBytes(_data);
         // Using the internal function instead of super.transfer() in the favour of reducing the code size
         _transfer(_from, _to, _value);
     }
