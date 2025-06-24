@@ -382,7 +382,7 @@ describe("USDTieredSTO Sim", function() {
             );
             
             const receipt = await tx.wait();
-            console.log(`          Gas addModule: ${receipt!.gasUsed.toString()}`);
+            console.log(`Gas addModule: ${receipt!.gasUsed.toString()}`);
 
             const moduleAddedEvent = receipt!.logs
                 .map(log => { try { return I_SecurityToken.interface.parseLog(log); } catch { return null; }})

@@ -1506,14 +1506,14 @@ describe("USDTieredSTO", function() {
             expect(totalStatus[2][0]).to.equal(0n, "override match");
             expect(totalStatus[2][1]).to.equal(0n, "override match");
         });
-        });
+    });
 
-        describe("Buy Tokens with no discount", async () => {
+    describe("Buy Tokens with no discount", async () => {
         it("should successfully buy using fallback at tier 0 for NONACCREDITED1", async () => {
             const stoId = 0;
             const tierId = 0;
 
-            const investment_Token = 50n * e18;
+            const investment_Token = ethers.parseEther("50"); // Invest 50 Tokens worth
             const investment_USD = await convert(stoId, tierId, false, "TOKEN", "USD", investment_Token);
             const investment_ETH = await convert(stoId, tierId, false, "TOKEN", "ETH", investment_Token);
 
@@ -1531,6 +1531,23 @@ describe("USDTieredSTO", function() {
             const init_RaisedDAI = await I_USDTieredSTO_Array[stoId].fundsRaised(DAI);
             const init_WalletETHBal = await ethers.provider.getBalance(WALLET.address);
             const init_WalletPOLYBal = await I_PolyToken.balanceOf(WALLET.address);
+
+            console.log({
+                init_TokenSupply: init_TokenSupply.toString(),
+                init_InvestorTokenBal: init_InvestorTokenBal.toString(),
+                init_InvestorETHBal: init_InvestorETHBal.toString(),
+                init_InvestorPOLYBal: init_InvestorPOLYBal.toString(),
+                init_STOTokenSold: init_STOTokenSold.toString(),
+                stoAddress,
+                init_STOETHBal: init_STOETHBal.toString(),
+                init_STOPOLYBal: init_STOPOLYBal.toString(),
+                init_RaisedUSD: init_RaisedUSD.toString(),
+                init_RaisedETH: init_RaisedETH.toString(),
+                init_RaisedPOLY: init_RaisedPOLY.toString(),
+                init_RaisedDAI: init_RaisedDAI.toString(),
+                init_WalletETHBal: init_WalletETHBal.toString(),
+                init_WalletPOLYBal: init_WalletPOLYBal.toString(),
+            }, "Buy Tokens with no discount");
 
             const tx1 = await NONACCREDITED1.sendTransaction({
                 to: stoAddress,
@@ -1557,6 +1574,8 @@ describe("USDTieredSTO", function() {
             const final_WalletETHBal = await ethers.provider.getBalance(WALLET.address);
             const final_WalletPOLYBal = await I_PolyToken.balanceOf(WALLET.address);
             console.log(`Gas final_TokenSupply`, final_TokenSupply);
+
+            console.log(init_TokenSupply, "initial Token Supply");
 
             expect(final_TokenSupply).to.equal(init_TokenSupply + investment_Token, "Token Supply not changed as expected");
             expect(final_InvestorTokenBal).to.equal(init_InvestorTokenBal + investment_Token, "Investor Token Balance not changed as expected");
@@ -2713,9 +2732,9 @@ describe("USDTieredSTO", function() {
             await I_USDOracle.connect(POLYMATH).changePrice(USDETH);
             await I_POLYOracle.connect(POLYMATH).changePrice(USDPOLY);
         });
-        });
+    });
 
-        describe("Buy Tokens with POLY discount", async () => {
+    describe("Buy Tokens with POLY discount", async () => {
         it("should successfully buy using fallback at tier 0 for NONACCREDITED1", async () => {
             const stoId = 2;
             const tierId = 0;
@@ -2738,10 +2757,25 @@ describe("USDTieredSTO", function() {
             const init_WalletETHBal = await ethers.provider.getBalance(WALLET.address);
             const init_WalletPOLYBal = await I_PolyToken.balanceOf(WALLET.address);
 
+            console.log({
+                init_TokenSupply: init_TokenSupply.toString(),
+                init_InvestorTokenBal: init_InvestorTokenBal.toString(),
+                init_InvestorETHBal: init_InvestorETHBal.toString(),
+                init_InvestorPOLYBal: init_InvestorPOLYBal.toString(),
+                init_STOTokenSold: init_STOTokenSold.toString(),
+                stoAddress,
+                init_STOETHBal: init_STOETHBal.toString(),
+                init_STOPOLYBal: init_STOPOLYBal.toString(),
+                init_RaisedUSD: init_RaisedUSD.toString(),
+                init_RaisedETH: init_RaisedETH.toString(),
+                init_RaisedPOLY: init_RaisedPOLY.toString(),
+                init_WalletETHBal: init_WalletETHBal.toString(),
+                init_WalletPOLYBal: init_WalletPOLYBal.toString(),
+            }, "Buy Tokens with POLY discount");
+
             const tx1 = await NONACCREDITED1.sendTransaction({
-            to: stoAddress,
-            value: investment_ETH,
-            
+                to: stoAddress,
+                value: investment_ETH,
             });
             const receipt1 = await tx1.wait();
             const gasCost1 = receipt1.gasUsed * receipt1.gasPrice;
@@ -3709,7 +3743,7 @@ describe("USDTieredSTO", function() {
             await I_USDOracle.connect(POLYMATH).changePrice(USDETH);
             await I_POLYOracle.connect(POLYMATH).changePrice(USDPOLY);
         });
-        });
+    });
 
     describe("Test getter functions", async () => {
         describe("Generic", async () => {

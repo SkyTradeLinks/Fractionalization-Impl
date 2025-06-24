@@ -300,8 +300,8 @@ describe("SecurityTokenRegistry", function() {
         });
 
         it("Should fail to register ticker if owner is 0x", async () => {
-            await I_PolyToken.connect(token_owner).transfer(account_temp.address, initRegFeePOLY);
-            await I_PolyToken.connect(account_temp).approve(await I_STRProxied.getAddress(), initRegFeePOLY);
+            await I_PolyToken.connect(account_temp).getTokens(initRegFeePOLY, account_temp.address);
+            await I_PolyToken.connect(account_temp).approve(I_STRProxied.target, initRegFeePOLY);
 
             await catchRevert(
                 I_STRProxied.connect(account_temp).registerNewTicker(address_zero, symbol),
@@ -1372,7 +1372,10 @@ describe("SecurityTokenRegistry", function() {
             assert.equal(event.args._newFee.toString(), newFee.toString());
             let tickerRegFee = await I_STRProxied.getUintValue(ethers.keccak256(ethers.toUtf8Bytes("tickerRegFee")));
             assert.equal(tickerRegFee.toString(), newFee.toString());
-            console.log(`Ticker registration fee changed to: ${newFee.toString()}`);
+            console.log(`Ticker registration fee changed to on script: ${newFee.toString()}`);
+
+            const fee = await I_STRProxied.getTickerRegistrationFee.staticCall();
+            console.log(fee, "fee");
         });
 
         // FEE ISSUE
