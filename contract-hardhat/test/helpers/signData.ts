@@ -1,5 +1,7 @@
 import { ethers } from "hardhat";
 import { solidityPackedKeccak256, Wallet } from "ethers";
+const Web3 = require("web3");
+let BN = Web3.utils.BN;
 
 async function getSignSTMData(
     tmAddress: string,
@@ -119,50 +121,51 @@ async function getSignGTMData(
     return signature;
 }
 
-function getSignGTMTransferData(
-    tmAddress: string,
-    investorAddress: string | string[],
-    fromTime: string | number | (string | number)[],
-    toTime: string | number | (string | number)[],
-    expiryTime: string | number | (string | number)[],
-    validFrom: string | number,
-    validTo: string | number,
-    nonce: string | number,
-    pk: string
-): Promise<string> {
-    return getMultiSignGTMData(tmAddress, investorAddress, fromTime, toTime, expiryTime, validFrom, validTo, nonce, pk);
+function getSignGTMTransferData(tmAddress, investorAddress, fromTime, toTime, expiryTime, validFrom, validTo, nonce, pk) {
+    const web3 = new Web3(new Web3.providers.HttpProvider(process.env.PROVIDER_URL));
+
+    let signature = getMultiSignGTMData(tmAddress, investorAddress, fromTime, toTime, expiryTime, validFrom, validTo, nonce, pk);
+    let packedData = web3.eth.abi.encodeParameters(
+        ['address[]', 'uint256[]', 'uint256[]', 'uint256[]', 'bytes'], 
+        [investorAddress, fromTime, toTime, expiryTime, signature]
+    );
+    let data = web3.eth.abi.encodeParameters(
+        ['address', 'uint256', 'uint256', 'uint256', 'bytes'], 
+        [tmAddress, new BN(nonce).toString(), new BN(validFrom).toString(), new BN(validTo).toString(), packedData]
+    );
+    return data;
 }
 
-async function getMultiSignGTMData(
-    tmAddress: string,
-    investorAddress: string | string[],
-    fromTime: string | number | (string | number)[],
-    toTime: string | number | (string | number)[],
-    expiryTime: string | number | bigint | (string | number | bigint)[],
-    validFrom: string | number,
-    validTo: string | number,
-    nonce: string | number,
-    pk: string
-): Promise<string> {
-    const hash = solidityPackedKeccak256(
-        ['address', 'address[]', 'uint256[]', 'uint256[]', 'uint256[]', 'uint256', 'uint256', 'uint256'],
-        [tmAddress, Array.isArray(investorAddress) ? investorAddress : [investorAddress],
-         Array.isArray(fromTime) ? fromTime : [fromTime],
-         Array.isArray(toTime) ? toTime : [toTime],
-         Array.isArray(expiryTime) ? expiryTime : [expiryTime],
-         validFrom, validTo, nonce]
-    );
+function getMultiSignGTMData(tmAddress, investorAddress, fromTime, toTime, expiryTime, validFrom, validTo, nonce, pk) {
+    const web3 = new Web3(new Web3.providers.HttpProvider(process.env.PROVIDER_URL));
 
-    const wallet = new Wallet(pk);
-    const signature = await wallet.signMessage(ethers.getBytes(hash));
+    let hash = web3.utils.soliditySha3({
+        t: 'address',
+        v: tmAddress
+    }, {
+        t: 'address[]',
+        v: investorAddress
+    }, {
+        t: 'uint256[]',
+        v: fromTime
+    }, {
+        t: 'uint256[]',
+        v: toTime
+    }, {
+        t: 'uint256[]',
+        v: expiryTime
+    }, {
+        t: 'uint256',
+        v: new BN(validFrom)
+    }, {
+        t: 'uint256',
+        v: new BN(validTo)
+    }, {
+        t: 'uint256',
+        v: new BN(nonce)
+    });
+    let signature = (web3.eth.accounts.sign(hash, pk)).signature;
     return signature;
-    // const flatSig = wallet.signingKey.sign(hash); // sign raw digest
-    // console.log("flatSig", flatSig.serialized);
-    // return flatSig.serialized; // same as web3's .signature
-    // const sig = wallet.signingKey.sign(hash);
-    // const signature = ethers.Signature.from(sig);
-    // console.log("signature", signature);
-    // return wallet.signingKey.sign(hash).serialized;
 }
 
 export {
