@@ -2,13 +2,13 @@
 pragma solidity 0.8.30;
 
 import "./ITradingRestrictionManager.sol";
+import "../../libraries/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
     bytes32 private _root;
 
-    constructor() Ownable(msg.sender) {}
+    constructor() {}
 
     mapping(address => bool) public isOperator;
     mapping(address => InvestorKYCData) private _kycData;
