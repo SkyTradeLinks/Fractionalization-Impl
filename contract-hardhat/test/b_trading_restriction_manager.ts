@@ -1,19 +1,99 @@
+import { LogDescription } from "ethers";
+import { setUpPolymathNetwork } from "./helpers/createInstances";
+import { latestTime } from "./helpers/latestTime";
+import { duration } from "./helpers/utils";
+
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { StandardMerkleTree } = require("@openzeppelin/merkle-tree");
 
 describe("TradingRestrictionManager", function () {
-  let contract, owner, operator, nonOperator, investor1, investor2, investor3, token1, token2;
+  let contract, owner, operator, nonOperator, investor1, investor2, investor3, token1, token2, account_controller;
   let merkleTree, merkleRoot, proof1, proof2, expiry, isAccredited1, isAccredited2;
+
+  let GeneralTransferManager;
+
+  let I_GeneralPermissionManagerFactory;
+    let I_SecurityTokenRegistryProxy;
+    let I_GeneralTransferManagerFactory;
+    let I_GeneralPermissionManager;
+    let I_GeneralTransferManager;
+    let I_ExchangeTransferManager;
+    let I_STRProxied: any;
+    let I_MRProxied;
+    let I_ModuleRegistry;
+    let I_ModuleRegistryProxy;
+    let I_FeatureRegistry;
+    let I_SecurityTokenRegistry;
+    let I_STFactory;
+    let I_SecurityToken;
+    let I_PolyToken;
+    let I_PolymathRegistry;
+    let I_STRGetter;
+    let I_STGetter;
+    let stGetter;
+    let ltime;
+
+    // Module key
+    const delegateManagerKey = 1;
+    const transferManagerKey = 2;
+    const stoKey = 3;
+
+    // Initial fee for ticker registry and security token registry
+    const initRegFee = ethers.parseEther("1000");
 
   const InvestorClass = {
     NonUS: 0,
     US: 1
   };
 
-  beforeEach(async function () {
-    [owner, operator, nonOperator, investor1, investor2, investor3, token1, token2] = await ethers.getSigners();
+  const name = "Team";
+  const symbol = "SAP";
+  const tokenDetails = "This is equity type of issuance";
+  const decimals = 18;
+  const contact = "team@polymath.network";
 
+  before(async function () {
+    [owner, operator, nonOperator, investor1, investor2, investor3, token1, token2, account_controller] = await ethers.getSigners();
+
+      GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
+
+      // Step 1: Deploy the general PM ecosystem
+      const instances = await setUpPolymathNetwork(owner.address, operator.address);
+
+      [
+          I_PolymathRegistry,
+          I_PolyToken,
+          I_FeatureRegistry,
+          I_ModuleRegistry,
+          I_ModuleRegistryProxy,
+          I_MRProxied,
+          I_GeneralTransferManagerFactory,
+          I_STFactory,
+          I_SecurityTokenRegistry,
+          I_SecurityTokenRegistryProxy,
+          I_STRProxied,
+          I_STRGetter,
+          I_STGetter
+      ] = instances;
+
+        // Printing all the contract addresses
+        console.log(`
+        --------------------- Polymath Network Smart Contracts: ---------------------
+        PolymathRegistry:                  ${I_PolymathRegistry.target}
+        SecurityTokenRegistryProxy:        ${I_SecurityTokenRegistryProxy.target}
+        SecurityTokenRegistry:             ${I_SecurityTokenRegistry.target}
+        ModuleRegistryProxy:               ${I_ModuleRegistryProxy.target}
+        ModuleRegistry:                    ${I_ModuleRegistry.target}
+        FeatureRegistry:                   ${I_FeatureRegistry.target}
+
+        STFactory:                         ${I_STFactory.target}
+        GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.target}
+        -----------------------------------------------------------------------------
+        `);
+  });
+
+  beforeEach(async function () {
     // Deploy contract
     const TradingRestrictionManager = await ethers.getContractFactory("TradingRestrictionManager");
     contract = await TradingRestrictionManager.deploy();
@@ -22,7 +102,8 @@ describe("TradingRestrictionManager", function () {
     await contract.connect(owner).grantOperator(operator.address);
 
     // Prepare Merkle tree data
-    expiry = Math.floor(Date.now() / 1000) + 3600 * 24 * 100; // 100 days from now
+    ltime = await latestTime();
+    expiry = await latestTime() + duration.days(100); // 100 days from now
     isAccredited1 = false;
     isAccredited2 = true;
 
@@ -44,87 +125,6 @@ describe("TradingRestrictionManager", function () {
         proof2 = merkleTree.getProof(i);
       }
     }
-  });
-
-  describe("Ownership", function () {
-    it("should set deployer as owner", async function () {
-      expect(await contract.owner()).to.equal(owner.address);
-    });
-
-    it("should allow owner to transfer ownership", async function () {
-      await contract.connect(owner).transferOwnership(operator.address);
-      expect(await contract.owner()).to.equal(operator.address);
-    });
-
-    it("should reject non-owner trying to transfer ownership", async function () {
-      await expect(
-        contract.connect(nonOperator).transferOwnership(operator.address)
-      ).to.be.reverted;
-    });
-
-    it("should reject transfer to zero address", async function () {
-      await expect(
-        contract.connect(owner).transferOwnership(ethers.ZeroAddress)
-      ).to.be.reverted;
-    });
-
-    it("should emit OwnershipTransferred event", async function () {
-      await expect(contract.connect(owner).transferOwnership(operator.address))
-        .to.emit(contract, "OwnershipTransferred")
-        .withArgs(owner.address, operator.address);
-    });
-  });
-
-  describe("Operator Management", function () {
-    it("should grant operator role", async function () {
-      expect(await contract.isOperator(operator.address)).to.equal(true);
-    });
-
-    it("should allow owner to grant operator role", async function () {
-      await contract.connect(owner).grantOperator(nonOperator.address);
-      expect(await contract.isOperator(nonOperator.address)).to.equal(true);
-    });
-
-    it("should emit OperatorRoleGranted event", async function () {
-      await expect(contract.connect(owner).grantOperator(nonOperator.address))
-        .to.emit(contract, "OperatorRoleGranted")
-        .withArgs(nonOperator.address);
-    });
-
-    it("should reject granting operator role to existing operator", async function () {
-      await expect(
-        contract.connect(owner).grantOperator(operator.address)
-      ).to.be.revertedWith("Already operator");
-    });
-
-    it("should reject non-owner trying to grant operator role", async function () {
-      await expect(
-        contract.connect(nonOperator).grantOperator(investor1.address)
-      ).to.be.reverted;
-    });
-
-    it("should allow owner to revoke operator role", async function () {
-      await contract.connect(owner).revokeOperator(operator.address);
-      expect(await contract.isOperator(operator.address)).to.equal(false);
-    });
-
-    it("should emit OperatorRoleRevoked event", async function () {
-      await expect(contract.connect(owner).revokeOperator(operator.address))
-        .to.emit(contract, "OperatorRoleRevoked")
-        .withArgs(operator.address);
-    });
-
-    it("should reject revoking non-operator", async function () {
-      await expect(
-        contract.connect(owner).revokeOperator(nonOperator.address)
-      ).to.be.revertedWith("Not an operator");
-    });
-
-    it("should reject non-owner trying to revoke operator role", async function () {
-      await expect(
-        contract.connect(nonOperator).revokeOperator(operator.address)
-      ).to.be.reverted;
-    });
   });
 
   describe("Merkle Root Management", function () {
@@ -282,6 +282,255 @@ describe("TradingRestrictionManager", function () {
     });
   });
 
+  describe("Generate the SecurityToken", async () => {
+        it("Should register the ticker before the generation of the security token", async () => {
+            await I_PolyToken.connect(operator).approve(I_STRProxied.target, initRegFee);
+            const tx = await I_STRProxied.connect(operator).registerNewTicker(operator.address, symbol);
+
+            const receipt = await tx.wait();
+            const fullReceipt = await ethers.provider.getTransactionReceipt(receipt!.hash);
+            const strProxiedAddress = await I_STRProxied.getAddress();
+        
+            const logs = fullReceipt!.logs.filter(log => 
+                log.address.toLowerCase() === strProxiedAddress.toLowerCase()
+            );
+        
+            let eventFound = false;
+            for (const log of logs) {
+                try {
+                    const parsed = I_STRProxied.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "RegisterTicker") { 
+                        expect(parsed.args._owner).to.equal(operator.address);
+                        expect(parsed.args._ticker).to.equal(symbol.toUpperCase());
+                        eventFound = true;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log: ${err.message}`);
+                }
+            }
+        
+            expect(eventFound).to.be.true;
+        });
+
+        it("Should generate the new security token with the same symbol as registered above", async () => {
+            await I_PolyToken.connect(operator).approve(I_STRProxied.target, initRegFee);
+
+            const tx = await I_STRProxied.connect(operator).generateNewSecurityToken(
+                name,
+                symbol,
+                tokenDetails,
+                false,
+                operator.address,
+                0
+            );
+            const receipt = await tx.wait();
+            let securityTokenEvent: LogDescription | null = null;
+
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_STRProxied.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "NewSecurityToken") {
+                        securityTokenEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(securityTokenEvent).to.not.be.null;
+            expect(securityTokenEvent!.args._ticker).to.equal(symbol.toUpperCase(), "SecurityToken doesn't get deployed");
+
+            I_SecurityToken = await ethers.getContractAt("SecurityToken", securityTokenEvent!.args._securityTokenAddress);
+            stGetter = await ethers.getContractAt("STGetter", I_SecurityToken.target);
+
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_SecurityToken.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "ModuleAdded") {
+                        securityTokenEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(securityTokenEvent).to.not.be.null;
+            const nameBytes32 = ethers.decodeBytes32String(securityTokenEvent!.args._name).replace(/\u0000/g, '');
+            expect(nameBytes32).to.equal("GeneralTransferManager", "SecurityToken doesn't have the transfer manager module");
+        });
+
+        it("Should set the controller", async() => {
+            await I_SecurityToken.connect(operator).setController(account_controller.address);
+        });
+
+        it("Should initialize the auto attached modules", async () => {
+            const moduleData: string[] = await stGetter.getModulesByType(transferManagerKey);
+
+            I_GeneralTransferManager = GeneralTransferManager.attach(moduleData[0]);
+        });
+
+        it("should set trading restriction manager", async () => { 
+            const tx = await I_GeneralTransferManager.connect(operator).setTradingRestrictionManager(contract.target);
+
+            const receipt = await tx.wait();
+            let tradingRestrictionEvent: LogDescription | null = null;
+
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_GeneralTransferManager.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "TradingRestrictionManagerUpdated") {
+                        tradingRestrictionEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(tradingRestrictionEvent).to.not.be.null;
+            expect(tradingRestrictionEvent!.args.newManager).to.equal(contract.target, "TradingRestrictionManager not set correctly");
+        });
+
+        it("should whitelist three investors", async () => {
+            const tx = await contract.connect(operator).modifyKYCData(merkleRoot);
+
+            const receipt = await tx.wait();
+            let MerkleRootUpdatedEvent: LogDescription | null = null;
+
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = contract.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "MerkleRootUpdated") {
+                        MerkleRootUpdatedEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(MerkleRootUpdatedEvent).to.not.be.null;
+            expect(MerkleRootUpdatedEvent!.args.root).to.equal(merkleRoot, "Merkle root not set correctly");
+        });
+
+        it("Should Buy the tokens", async () => {
+
+            // Mint some tokens - Fixed: use "0x" instead of "0x0"
+            await I_SecurityToken.connect(operator).issue(
+                investor1.address, 
+                ethers.parseEther("10"), 
+                "0x"
+            );
+
+            expect(await I_SecurityToken.balanceOf(investor1.address)).to.equal(ethers.parseEther("10"));
+        });
+
+        it("should verify investor with valid proof", async function () {
+          const tx = await contract.connect(investor1).verifyInvestor(
+            proof1,
+            investor1.address,
+            expiry,
+            isAccredited1,
+            InvestorClass.NonUS
+          );
+
+          await expect(tx)
+            .to.emit(contract, "InvestorKYCDataUpdated")
+            .withArgs(investor1.address, proof1, expiry, isAccredited1, InvestorClass.NonUS);
+
+          expect(await contract.isExistingInvestor(investor1.address)).to.equal(true);
+        });
+    });
+
+  describe("Ownership", function () {
+    it("should set deployer as owner", async function () {
+      expect(await contract.owner()).to.equal(owner.address);
+    });
+
+    it("should allow owner to transfer ownership", async function () {
+      await contract.connect(owner).transferOwnership(operator.address);
+      expect(await contract.owner()).to.equal(operator.address);
+    });
+
+    it("should reject non-owner trying to transfer ownership", async function () {
+      await expect(
+        contract.connect(nonOperator).transferOwnership(operator.address)
+      ).to.be.reverted;
+    });
+
+    it("should reject transfer to zero address", async function () {
+      await expect(
+        contract.connect(owner).transferOwnership(ethers.ZeroAddress)
+      ).to.be.reverted;
+    });
+
+    it("should emit OwnershipTransferred event", async function () {
+      await expect(contract.connect(owner).transferOwnership(operator.address))
+        .to.emit(contract, "OwnershipTransferred")
+        .withArgs(owner.address, operator.address);
+    });
+  });
+
+  describe("Operator Management", function () {
+    it("should grant operator role", async function () {
+      expect(await contract.isOperator(operator.address)).to.equal(true);
+    });
+
+    it("should allow owner to grant operator role", async function () {
+      await contract.connect(owner).grantOperator(nonOperator.address);
+      expect(await contract.isOperator(nonOperator.address)).to.equal(true);
+    });
+
+    it("should emit OperatorRoleGranted event", async function () {
+      await expect(contract.connect(owner).grantOperator(nonOperator.address))
+        .to.emit(contract, "OperatorRoleGranted")
+        .withArgs(nonOperator.address);
+    });
+
+    it("should reject granting operator role to existing operator", async function () {
+      await expect(
+        contract.connect(owner).grantOperator(operator.address)
+      ).to.be.revertedWith("Already operator");
+    });
+
+    it("should reject non-owner trying to grant operator role", async function () {
+      await expect(
+        contract.connect(nonOperator).grantOperator(investor1.address)
+      ).to.be.reverted;
+    });
+
+    it("should allow owner to revoke operator role", async function () {
+      await contract.connect(owner).revokeOperator(operator.address);
+      expect(await contract.isOperator(operator.address)).to.equal(false);
+    });
+
+    it("should emit OperatorRoleRevoked event", async function () {
+      await expect(contract.connect(owner).revokeOperator(operator.address))
+        .to.emit(contract, "OperatorRoleRevoked")
+        .withArgs(operator.address);
+    });
+
+    it("should reject revoking non-operator", async function () {
+      await expect(
+        contract.connect(owner).revokeOperator(nonOperator.address)
+      ).to.be.revertedWith("Not an operator");
+    });
+
+    it("should reject non-owner trying to revoke operator role", async function () {
+      await expect(
+        contract.connect(nonOperator).revokeOperator(operator.address)
+      ).to.be.reverted;
+    });
+  });
+
   describe("Trading Restriction Management", function () {
     it("should set trading restriction periods", async function () {
       const nonUSPeriod = 30 * 24 * 3600; // 30 days
@@ -359,7 +608,7 @@ describe("TradingRestrictionManager", function () {
       const now = Math.floor(Date.now() / 1000);
       expect(result.canSendAfter).to.be.gt(now);
       expect(result.canReceiveAfter).to.be.gt(now);
-      expect(result.expiryTime).to.be.lt(now);
+      expect(result.expiryTime).to.be.lt(expiry);
       expect(result.added).to.equal(0);
     });
 

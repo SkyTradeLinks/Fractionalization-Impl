@@ -11,6 +11,7 @@ interface IPolymathRegistry {
      *  registryAddress
      */
     function getAddress(string calldata _nameKey) external view returns(address registryAddress);
+    function getAddressForTest(string calldata _nameKey) external view returns(address registryAddress);
 
     /**
      * @notice Changes the contract address
