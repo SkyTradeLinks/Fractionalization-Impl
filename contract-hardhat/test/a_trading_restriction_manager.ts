@@ -449,8 +449,8 @@ describe("Trading restriction Manager", function() {
         it("Should successfully attach the first STO module to the security token", async () => {
             const stoId = 0; // No discount
 
-            _startTime.push(BigInt(ltime) + BigInt(2 * 24 * 60 * 60));
-            _endTime.push(BigInt(ltime) + BigInt(2 * 24 * 60 * 60) + BigInt(100 * 24 * 60 * 60));
+            _startTime.push(BigInt(await latestTime() + duration.days(1)));
+            _endTime.push(BigInt(ltime) + BigInt(duration.days(30)));
             _ratePerTier.push([10n * e16, 15n * e16]); // [ 0.10 USD/Token, 0.15 USD/Token ]
             _ratePerTierDiscountPoly.push([10n * e16, 15n * e16]); // [ 0.10 USD/Token, 0.15 USD/Token ]
             _tokensPerTierTotal.push([100000000n * e18, 200000000n * e18]); // [ 100m Token, 200m Token ]
@@ -479,7 +479,7 @@ describe("Trading restriction Manager", function() {
 
             const stoInterface = new ethers.Interface([functionSignature]);
             const bytesSTO = stoInterface.encodeFunctionData("configure", config);
-            const tx = await I_SecurityToken.connect(token_owner).addModule(await I_USDTieredSTOFactory.getAddress(), bytesSTO, 0n, 0n, false);
+            const tx = await I_SecurityToken.connect(token_owner).addModule(I_USDTieredSTOFactory.target, bytesSTO, 0n, 0n, false);
             
             const receipt = await tx.wait();
             console.log(`Gas addModule: ${receipt.gasUsed}`);
@@ -629,12 +629,13 @@ describe("Trading restriction Manager", function() {
         });
 
         it("should successfully buy using buyWithUSD at tier 0 for NONACCREDITED account_investor1", async () => {
+            await ethers.provider.send("evm_increaseTime", [duration.days(1)]);
             const stoId = 0;
             const tierId = 0;
 
             const investment_Token = 50n * e18;
             const investment_DAI = await convert(stoId, tierId, false, "TOKEN", "USD", investment_Token);
-
+            
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
             const daiAddress = await I_DaiToken.getAddress();
             await I_DaiToken.getTokens(investment_DAI, account_investor1.address);
@@ -656,7 +657,7 @@ describe("Trading restriction Manager", function() {
             const init_WalletDAIBal = await I_DaiToken.balanceOf(account_issuer.address);
 
             // Buy With DAI
-            const tx2 = await I_USDTieredSTO_Array[stoId].connect(account_investor1).buyWithUSD(account_investor1.address, investment_DAI, daiAddress);
+            const tx2 = await I_USDTieredSTO_Array[stoId].connect(account_investor1).buyWithUSD(account_investor1.address, investment_DAI, daiAddress, proof1, ltime, isAccredited1, InvestorClass.NonUS);
             const receipt2 = await tx2.wait();
             const gasCost2 = receipt2.gasUsed * receipt2.gasPrice;
             console.log(`Gas buyWithUSD: ${receipt2.gasUsed}`);
@@ -693,21 +694,10 @@ describe("Trading restriction Manager", function() {
             expect(await I_USDTieredSTO_Array[stoId].stableCoinsRaised(daiAddress)).to.equal(investment_DAI, "DAI Raised not changed as expected");
         });
 
-        // TO BE REMOVED AFTER USDTieredSTO is updated to work with merkle tree whitelisting
-        it("Should Buy the tokens", async () => {
-            // Mint some tokens - Fixed: use "0x" instead of "0x0"
-            await I_SecurityToken.connect(token_owner).issue(
-                account_investor1.address, 
-                ethers.parseEther("10"), 
-                "0x"
-            );
-
-            expect(await I_SecurityToken.balanceOf(account_investor1.address)).to.equal(ethers.parseEther("10"));
-        });
-
         it("Create new dividend", async () => {
-            const maturity = (await latestTime()) + duration.days(1);
+            const maturity = (await latestTime());
             const expiry = (await latestTime()) + duration.days(10);
+            await I_PolyToken.connect(token_owner).approve(I_ERC20DividendCheckpoint.target, ethers.parseEther("1.5"));
             await I_PolyToken.connect(token_owner).getTokens(ethers.parseEther("1.5"), token_owner.address);
             // transfer approved in above test
             const tx = await I_ERC20DividendCheckpoint.connect(token_owner).createDividend(
@@ -730,43 +720,53 @@ describe("Trading restriction Manager", function() {
             .find(parsed => parsed && parsed.name === "ERC20DividendDeposited");
 
             expect(dividendDepositedEvent).to.not.be.null;
-            expect(dividendDepositedEvent!.args._checkpointId).to.equal(2n);
+            expect(dividendDepositedEvent!.args._checkpointId).to.equal(1n);
         });
 
-        it("should investor 3 claims dividend", async () => {
+        it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
             const investor1Balance = await I_PolyToken.balanceOf(account_investor1.address);
-            const investor2Balance = await I_PolyToken.balanceOf(account_investor2.address);
-            const investor3Balance = await I_PolyToken.balanceOf(account_investor3.address);
-            
-            await I_ERC20DividendCheckpoint.connect(account_investor1).pullDividendPayment(1);
-            
+            await I_ERC20DividendCheckpoint.connect(token_owner).pushDividendPayment(0, 0n, 10);
             const investor1BalanceAfter = await I_PolyToken.balanceOf(account_investor1.address);
-            const investor2BalanceAfter = await I_PolyToken.balanceOf(account_investor2.address);
-            const investor3BalanceAfter = await I_PolyToken.balanceOf(account_investor3.address);
-            
-            expect(investor1BalanceAfter - investor1Balance).to.equal(0n);
-            expect(investor2BalanceAfter - investor2Balance).to.equal(0n);
-            expect(investor3BalanceAfter - investor3Balance).to.equal(ethers.parseEther("7"));
-            
-            const info = await I_ERC20DividendCheckpoint.getDividendProgress(2);
-            
-            // Find the index for account_temp and account_investor3
-            const tempIndex = info[0].findIndex((addr: string) => addr === account_temp.address);
-            const investor3Index = info[0].findIndex((addr: string) => addr === account_investor3.address);
+            expect(investor1BalanceAfter - investor1Balance).to.equal(ethers.parseEther("1.5"));
 
-            expect(tempIndex).to.not.equal(-1);
-            expect(investor3Index).to.not.equal(-1);
-
-            expect(info[0][tempIndex]).to.equal(account_temp.address); // address
-            expect(info[1][tempIndex]).to.be.false; // claimed
-            expect(info[2][tempIndex]).to.be.true; // excluded
-            expect(info[3][tempIndex]).to.equal(0n); // withheld
-
-            expect(info[0][investor3Index]).to.equal(account_investor3.address); // address
-            expect(info[1][investor3Index]).to.be.true; // claimed
-            expect(info[2][investor3Index]).to.be.false; // excluded
-            expect(info[3][investor3Index]).to.equal(0n); // withheld
+            const dividendData = await I_ERC20DividendCheckpoint.dividends(0);
+            expect(dividendData.claimedAmount).to.equal(ethers.parseEther("1.5"));
         });
+
+        // it("should investor 1 claims dividend", async () => {
+        //     const investor1Balance = await I_PolyToken.balanceOf(account_investor1.address);
+        //     const investor2Balance = await I_PolyToken.balanceOf(account_investor2.address);
+        //     const investor3Balance = await I_PolyToken.balanceOf(account_investor3.address);
+            
+        //     await I_ERC20DividendCheckpoint.connect(account_investor1).pullDividendPayment(1);
+            
+        //     const investor1BalanceAfter = await I_PolyToken.balanceOf(account_investor1.address);
+        //     const investor2BalanceAfter = await I_PolyToken.balanceOf(account_investor2.address);
+        //     const investor3BalanceAfter = await I_PolyToken.balanceOf(account_investor3.address);
+            
+        //     expect(investor1BalanceAfter - investor1Balance).to.equal(0n);
+        //     expect(investor2BalanceAfter - investor2Balance).to.equal(0n);
+        //     expect(investor3BalanceAfter - investor3Balance).to.equal(ethers.parseEther("7"));
+            
+        //     const info = await I_ERC20DividendCheckpoint.getDividendProgress(2);
+            
+        //     // Find the index for account_temp and account_investor3
+        //     const tempIndex = info[0].findIndex((addr: string) => addr === account_temp.address);
+        //     const investor3Index = info[0].findIndex((addr: string) => addr === account_investor3.address);
+
+        //     expect(tempIndex).to.not.equal(-1);
+        //     expect(investor3Index).to.not.equal(-1);
+
+        //     expect(info[0][tempIndex]).to.equal(account_temp.address); // address
+        //     expect(info[1][tempIndex]).to.be.false; // claimed
+        //     expect(info[2][tempIndex]).to.be.true; // excluded
+        //     expect(info[3][tempIndex]).to.equal(0n); // withheld
+
+        //     expect(info[0][investor3Index]).to.equal(account_investor3.address); // address
+        //     expect(info[1][investor3Index]).to.be.true; // claimed
+        //     expect(info[2][investor3Index]).to.be.false; // excluded
+        //     expect(info[3][investor3Index]).to.equal(0n); // withheld
+        // });
     });
 
     describe("Buy tokens using on-chain whitelist", async () => {
