@@ -102,6 +102,44 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
         emit WhitelistOnlyTradingUpdated(token, status);
     }
 
+    // function getInvestorKYCData(
+    //     address investor,
+    //     address token
+    // ) public view returns (
+    //     uint64 canSendAfter,
+    //     uint64 canReceiveAfter,
+    //     uint64 expiryTime,
+    //     uint8 added
+    // ) {
+    //     bool exists = _existingInvestors[investor];
+    //     bool enforceWhitelist = whitelistOnlyTrading[token];
+
+    //     if (!exists && enforceWhitelist) {
+    //         return (_future(), _future(), _past(), 0);
+    //     }
+
+    //     InvestorKYCData memory kyc = _kycData[investor];
+    //     uint64 startTime = tokenLockStartTime[token];
+
+    //     if (startTime == 0) {
+    //         return (_future(), _future(), kyc.expiryTime, 1);
+    //     }
+
+    //     uint64 restrictionPeriod = kyc.investorClass == InvestorClass.US
+    //         ? usTradingRestrictionPeriod[token]
+    //         : nonUSTradingRestrictionPeriod[token];
+
+    //     uint64 unlockTime = startTime + restrictionPeriod;
+    //     uint64 sendAfter = block.timestamp >= unlockTime ? _past() : unlockTime;
+
+    //     return (
+    //         sendAfter,
+    //         _past(),
+    //         kyc.expiryTime,
+    //         1
+    //     );
+    // }
+
     function getInvestorKYCData(
         address investor,
         address token
@@ -131,10 +169,11 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
 
         uint64 unlockTime = startTime + restrictionPeriod;
         uint64 sendAfter = block.timestamp >= unlockTime ? _past() : unlockTime;
+        uint64 receiveAfter = block.timestamp <= startTime ? _past() : sendAfter;
 
         return (
             sendAfter,
-            _past(),
+            receiveAfter,
             kyc.expiryTime,
             1
         );
