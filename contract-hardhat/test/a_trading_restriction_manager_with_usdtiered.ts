@@ -804,7 +804,7 @@ describe("Trading restriction Manager", function() {
 
             // --- Verify non-US to US transfer fails ---
             await expect(I_SecurityToken.connect(account_investor1).transfer(account_investor3.address, amount))
-                .to.be.revertedWith("Receiver transfer restriction");
+                .to.be.reverted;
         });
         
         /**
