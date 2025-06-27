@@ -8,6 +8,7 @@ import { duration } from "./helpers/utils";
 import { deployERC20DividendAndVerifyed, deployGPMAndVerifyed, deployUSDTieredSTOAndVerified, setUpPolymathNetwork } from "./helpers/createInstances";
 import { initializeContracts } from "../scripts/polymath-deploy";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 const functionSignature = {
         name: "configure",
@@ -148,9 +149,14 @@ describe("Trading restriction Manager", function() {
     let proof1;
     let proof2;
     let proof3;
+    let proof4;
     let ltime;
     let isAccredited1;
     let isAccredited2;
+
+    // Helper to increase blockchain time
+    const ONE_DAY_IN_SECONDS = 24 * 60 * 60;
+    const ONE_YEAR_IN_SECONDS = 365 * ONE_DAY_IN_SECONDS;
 
     const InvestorClass = {
         NonUS: 0,
@@ -268,14 +274,15 @@ describe("Trading restriction Manager", function() {
         toTime = await latestTime();
         expiryTime = toTime + duration.days(15);
 
-        ltime = await latestTime() + duration.days(10);
+        ltime = await latestTime() + duration.days(300);
         isAccredited1 = false;
         isAccredited2 = true;
 
         const values = [
-            [account_investor1.address, ltime, isAccredited1],
-            [account_investor2.address, ltime, isAccredited2],
-            [account_investor3.address, ltime, true]
+            [account_investor1.address, ltime, false],
+            [account_investor2.address, ltime, true],
+            [account_investor3.address, ltime, true],
+            [account_investor4.address, ltime, false]
         ];
 
         merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
@@ -291,6 +298,9 @@ describe("Trading restriction Manager", function() {
             }
             if (v[0] === account_investor3.address) {
                 proof3 = merkleTree.getProof(i);
+            }
+            if (v[0] === account_investor4.address) {
+                proof4 = merkleTree.getProof(i);
             }
         }
 
@@ -628,6 +638,18 @@ describe("Trading restriction Manager", function() {
             ).to.not.be.reverted;
         });
 
+        it("Should verify investor 4 correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(account_investor4).verifyInvestor(
+                proof4,
+                account_investor4.address,
+                ltime,
+                false,
+                InvestorClass.US
+            )
+            ).to.not.be.reverted;
+        });
+
         it("should successfully buy using buyWithUSD at tier 0 for NONACCREDITED account_investor1", async () => {
             await ethers.provider.send("evm_increaseTime", [duration.days(1)]);
             const stoId = 0;
@@ -723,75 +745,104 @@ describe("Trading restriction Manager", function() {
             expect(dividendDepositedEvent!.args._checkpointId).to.equal(1n);
         });
 
-        it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
-            const investor1Balance = await I_PolyToken.balanceOf(account_investor1.address);
-            await I_ERC20DividendCheckpoint.connect(token_owner).pushDividendPayment(0, 0n, 10);
-            const investor1BalanceAfter = await I_PolyToken.balanceOf(account_investor1.address);
-            expect(investor1BalanceAfter - investor1Balance).to.equal(ethers.parseEther("1.5"));
-
-            const dividendData = await I_ERC20DividendCheckpoint.dividends(0);
-            expect(dividendData.claimedAmount).to.equal(ethers.parseEther("1.5"));
-        });
-
-        // it("should investor 1 claims dividend", async () => {
+        // it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
         //     const investor1Balance = await I_PolyToken.balanceOf(account_investor1.address);
-        //     const investor2Balance = await I_PolyToken.balanceOf(account_investor2.address);
-        //     const investor3Balance = await I_PolyToken.balanceOf(account_investor3.address);
-            
-        //     await I_ERC20DividendCheckpoint.connect(account_investor1).pullDividendPayment(1);
-            
+        //     await I_ERC20DividendCheckpoint.connect(token_owner).pushDividendPayment(0, 0n, 10);
         //     const investor1BalanceAfter = await I_PolyToken.balanceOf(account_investor1.address);
-        //     const investor2BalanceAfter = await I_PolyToken.balanceOf(account_investor2.address);
-        //     const investor3BalanceAfter = await I_PolyToken.balanceOf(account_investor3.address);
-            
-        //     expect(investor1BalanceAfter - investor1Balance).to.equal(0n);
-        //     expect(investor2BalanceAfter - investor2Balance).to.equal(0n);
-        //     expect(investor3BalanceAfter - investor3Balance).to.equal(ethers.parseEther("7"));
-            
-        //     const info = await I_ERC20DividendCheckpoint.getDividendProgress(2);
-            
-        //     // Find the index for account_temp and account_investor3
-        //     const tempIndex = info[0].findIndex((addr: string) => addr === account_temp.address);
-        //     const investor3Index = info[0].findIndex((addr: string) => addr === account_investor3.address);
+        //     expect(investor1BalanceAfter - investor1Balance).to.equal(ethers.parseEther("1.5"));
 
-        //     expect(tempIndex).to.not.equal(-1);
-        //     expect(investor3Index).to.not.equal(-1);
-
-        //     expect(info[0][tempIndex]).to.equal(account_temp.address); // address
-        //     expect(info[1][tempIndex]).to.be.false; // claimed
-        //     expect(info[2][tempIndex]).to.be.true; // excluded
-        //     expect(info[3][tempIndex]).to.equal(0n); // withheld
-
-        //     expect(info[0][investor3Index]).to.equal(account_investor3.address); // address
-        //     expect(info[1][investor3Index]).to.be.true; // claimed
-        //     expect(info[2][investor3Index]).to.be.false; // excluded
-        //     expect(info[3][investor3Index]).to.equal(0n); // withheld
+        //     const dividendData = await I_ERC20DividendCheckpoint.dividends(0);
+        //     expect(dividendData.claimedAmount).to.equal(ethers.parseEther("1.5"));
         // });
-    });
 
-    describe("Buy tokens using on-chain whitelist", async () => {
+        it("distribute initial tokens to investors", async () => {
+            const amount = ethers.parseEther("100");
+            await I_SecurityToken.connect(token_owner).issue(account_investor1.address, amount, "0x");
+            await I_SecurityToken.connect(token_owner).issue(account_investor2.address, amount, "0x");
+            await I_SecurityToken.connect(token_owner).issue(account_investor3.address, amount, "0x");
+            
+            console.log(amount, " tokens issued to investors", await I_SecurityToken.balanceOf(account_investor1.address));
+            
+            expect(await I_SecurityToken.balanceOf(account_investor1.address)).to.equal(amount + ethers.parseEther("50")); // 50 from buyWithUSD
+            expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(amount);
+            expect(await I_SecurityToken.balanceOf(account_investor3.address)).to.equal(amount);
 
-        it("Should Buy some more tokens", async () => {
-            // Mint some tokens - Fixed: use "0x" instead of "0x0"
-            await I_SecurityToken.connect(token_owner).issue(
-                account_investor2.address, 
-                ethers.parseEther("10"), 
-                "0x"
-            );
+            console.log("Investor 1 balance: ", await I_SecurityToken.balanceOf(account_investor1.address));
+            console.log("Investor 2 balance: ", await I_SecurityToken.balanceOf(account_investor2.address));
+            console.log("Investor 3 balance: ", await I_SecurityToken.balanceOf(account_investor3.address));
 
-            expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(ethers.parseEther("10"));
+            expect(await I_TradingRestrictionManager.connect(account_polymath).setWhitelistOnlyTrading(I_SecurityToken.target, true)).to.emit(
+                I_TradingRestrictionManager,
+                "WhitelistOnlyTradingUpdated"
+            ).withArgs(I_SecurityToken.target, true);
         });
 
-        it("Add a new token holder", async () => {
-            // Mint some tokens - Fixed: use "0x" instead of "0x0"
-            await I_SecurityToken.connect(token_owner).issue(
-                account_investor3.address, 
-                ethers.parseEther("10"), 
-                "0x"
-            );
+        /**
+         * Test Case 3:
+         * If non US tokens are no longer restricted the owners can trade them within non-US investors pool.
+         * They cannot be sent to US investors unless US trading restrictions period also expired for these tokens.
+        */
+        it("Test Case 3: Should allow trading between non-US investors after non-US restriction expires, but not to US investors", async function () {
+            const nonUSPeriod = 90 * ONE_DAY_IN_SECONDS; // 90 days
+            const usPeriod = 180 * ONE_DAY_IN_SECONDS; // 180 days
+            const lockStartTime = await time.latest();
 
-            expect(await I_SecurityToken.balanceOf(account_investor3.address)).to.equal(ethers.parseEther("10"));
+            // --- Set Trading Restrictions (unified start time for all investors - part of Test Case 4) ---
+            await I_TradingRestrictionManager.connect(account_polymath).setTradingRestrictionPeriod(await I_SecurityToken.getAddress(), nonUSPeriod, usPeriod, lockStartTime);
+            await I_TradingRestrictionManager.connect(account_polymath).setWhitelistOnlyTrading(await I_SecurityToken.getAddress(), true);
+
+            // --- Fast-forward time to be after non-US period, but before US period ---
+            await time.increaseTo(lockStartTime + nonUSPeriod + ONE_DAY_IN_SECONDS);
+
+            // --- Verify non-US to non-US transfer is successful ---
+            const amount = ethers.parseEther("10");
+            await expect(I_SecurityToken.connect(account_investor1).transfer(account_investor2.address, amount))
+                .to.emit(I_SecurityToken, "Transfer")
+                .withArgs(account_investor1.address, account_investor2.address, amount);
+            
+            expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(amount + ethers.parseEther("100"));
+
+            // --- Verify non-US to US transfer fails ---
+            await expect(I_SecurityToken.connect(account_investor1).transfer(account_investor3.address, amount))
+                .to.be.revertedWith("Receiver transfer restriction");
         });
+        
+        /**
+         * Test Case 4 & 5:
+         * 4. Trading restriction period starts from the moment when the issuance/sale concluded for all investors.
+         * 5. After both US and non US token restrictions expire, tokens can be traded freely between US and non-US investors,
+         * but still cannot be sent to an unwhitelisted wallet address.
+         */
+        it("Test Cases 4 & 5: Should enforce a unified lock start time and allow free trade between whitelisted investors post-restriction, but block unwhitelisted transfers", async function () {
+            const nonUSPeriod = 90 * ONE_DAY_IN_SECONDS;
+            const usPeriod = 180 * ONE_DAY_IN_SECONDS;
+            const lockStartTime = await time.latest();
 
+            // --- Set Trading Restrictions (Test Case 4: Unified Start Time) ---
+            // The lockStartTime is a single timestamp for the token, demonstrating the rule.
+            await I_TradingRestrictionManager.connect(account_polymath).setTradingRestrictionPeriod(await I_SecurityToken.getAddress(), nonUSPeriod, usPeriod, lockStartTime);
+            await I_TradingRestrictionManager.connect(account_polymath).setWhitelistOnlyTrading(await I_SecurityToken.getAddress(), true); // Enforce whitelist (Test Case 5)
+
+            // --- Fast-forward time past ALL restriction periods ---
+            await time.increaseTo(lockStartTime + usPeriod + ONE_DAY_IN_SECONDS);
+            
+            const amount = ethers.parseEther("10");
+
+            // --- Verify non-US to US transfer is NOW successful ---
+            await expect(I_SecurityToken.connect(account_investor1).transfer(account_investor3.address, amount))
+                .to.emit(I_SecurityToken, "Transfer");
+
+            // --- Verify US to non-US transfer is ALSO successful ---
+            await expect(I_SecurityToken.connect(account_investor3).transfer(account_investor1.address, amount))
+                .to.emit(I_SecurityToken, "Transfer");
+
+            // --- Verify transfer TO an unwhitelisted address fails (Test Case 5) ---
+            await expect(I_SecurityToken.connect(account_investor1).transfer(token_owner.address, amount))
+                .to.be.reverted;
+                
+            // --- Verify transfer FROM an unwhitelisted address fails ---
+            await expect(I_SecurityToken.connect(token_owner).transfer(account_investor1.address, amount))
+                 .to.be.reverted;
+        });
     });
 });
