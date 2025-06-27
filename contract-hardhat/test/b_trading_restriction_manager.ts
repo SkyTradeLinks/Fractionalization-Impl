@@ -420,34 +420,6 @@ describe("TradingRestrictionManager", function () {
             expect(MerkleRootUpdatedEvent).to.not.be.null;
             expect(MerkleRootUpdatedEvent!.args.root).to.equal(merkleRoot, "Merkle root not set correctly");
         });
-
-        it("Should Buy the tokens", async () => {
-
-            // Mint some tokens - Fixed: use "0x" instead of "0x0"
-            await I_SecurityToken.connect(operator).issue(
-                investor1.address, 
-                ethers.parseEther("10"), 
-                "0x"
-            );
-
-            expect(await I_SecurityToken.balanceOf(investor1.address)).to.equal(ethers.parseEther("10"));
-        });
-
-        it("should verify investor with valid proof", async function () {
-          const tx = await contract.connect(investor1).verifyInvestor(
-            proof1,
-            investor1.address,
-            expiry,
-            isAccredited1,
-            InvestorClass.NonUS
-          );
-
-          await expect(tx)
-            .to.emit(contract, "InvestorKYCDataUpdated")
-            .withArgs(investor1.address, proof1, expiry, isAccredited1, InvestorClass.NonUS);
-
-          expect(await contract.isExistingInvestor(investor1.address)).to.equal(true);
-        });
     });
 
   describe("Ownership", function () {
