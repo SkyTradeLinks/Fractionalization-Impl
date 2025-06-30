@@ -13,6 +13,9 @@ import Web3 from "web3";
 
 const web3 = new Web3("http://localhost:8545"); // Hardcoded development port
 
+const GAS_PRICE = process.env.COVERAGE === "true" ? 1n : 10000000000n; // 10 GWEI
+
+
 //const TOLERANCE = 2; // Allow balances to be off by 2 WEI for rounding purposes
 
 describe("USDTieredSTO Sim", function() {
@@ -30,7 +33,7 @@ describe("USDTieredSTO Sim", function() {
     let NOTAPPROVED: HardhatEthersSigner;
     let accounts: HardhatEthersSigner[];
 
-    const GAS_PRICE = 10000000000n; // 10 GWEI
+    console.log(process.env.COVERAGE, "process.env.COVERAGE");
 
     // Contract Instance Declaration
     let I_GeneralTransferManagerFactory: any;
