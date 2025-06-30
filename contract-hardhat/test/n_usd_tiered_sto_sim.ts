@@ -660,7 +660,7 @@ describe("USDTieredSTO Sim", function() {
                     await I_DaiToken.connect(POLYMATH).getTokens(investment_DAI, _investor.address);
                     await I_DaiToken.connect(_investor).approve(I_USDTieredSTO_Array[stoId].target, investment_DAI);
                     await expect(
-                        I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, { gasPrice: GAS_PRICE })
+                        I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, [ethers.ZeroHash], 0, false, 0, { gasPrice: GAS_PRICE })
                     ).to.be.reverted;
                 } else
                     await expect(
@@ -735,7 +735,7 @@ describe("USDTieredSTO Sim", function() {
                         `buyWithPOLY: ${investment_Token / e18} tokens for ${investment_POLY / e18} POLY by ${_investor.address}`
                     );
                 } else if (isDai && investment_DAI > 10n) {
-                    tx = await I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, { gasPrice: GAS_PRICE });
+                    tx = await I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, [ethers.ZeroHash], 0, false, 0, { gasPrice: GAS_PRICE });
                     const receipt = await tx.wait();
                     gasCost = receipt!.gasUsed * GAS_PRICE;
                     console.log(

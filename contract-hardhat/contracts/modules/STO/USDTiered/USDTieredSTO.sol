@@ -347,9 +347,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
     /**
     * @notice receive function - assumes ETH being invested
     */
-    receive() external payable {
-        buyWithETHRateLimited(msg.sender, 0);
-    }
+    receive() external payable {}
 
     // Buy functions without rate restriction
     fallback() external payable {

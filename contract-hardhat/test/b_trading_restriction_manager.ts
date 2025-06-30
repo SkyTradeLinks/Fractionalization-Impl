@@ -2,6 +2,7 @@ import { LogDescription } from "ethers";
 import { setUpPolymathNetwork } from "./helpers/createInstances";
 import { latestTime } from "./helpers/latestTime";
 import { duration } from "./helpers/utils";
+import { network } from "hardhat";
 
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
@@ -54,6 +55,10 @@ describe("TradingRestrictionManager", function () {
   const contact = "team@polymath.network";
 
   before(async function () {
+    await network.provider.request({
+      method: "hardhat_reset",
+      params: [],
+    });
     [owner, operator, nonOperator, investor1, investor2, investor3, token1, token2, account_controller] = await ethers.getSigners();
 
       GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
@@ -633,7 +638,7 @@ describe("TradingRestrictionManager", function () {
         expect(result.canSendAfter).to.equal(expectedUnlockTime);
       }
 
-      expect(result.canReceiveAfter).to.be.lt(now);
+      expect(result.canReceiveAfter).to.equal(expectedUnlockTime);
       expect(result.expiryTime).to.equal(expiry);
       expect(result.added).to.equal(1);
     });
