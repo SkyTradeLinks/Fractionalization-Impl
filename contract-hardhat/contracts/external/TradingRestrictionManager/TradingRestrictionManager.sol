@@ -131,10 +131,11 @@ contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
 
         uint64 unlockTime = startTime + restrictionPeriod;
         uint64 sendAfter = block.timestamp >= unlockTime ? _past() : unlockTime;
+        uint64 receiveAfter = block.timestamp <= startTime ? _past() : sendAfter;
 
         return (
             sendAfter,
-            _past(),
+            receiveAfter,
             kyc.expiryTime,
             1
         );

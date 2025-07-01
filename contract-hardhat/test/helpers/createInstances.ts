@@ -26,10 +26,12 @@ import {
     SecurityTokenRegistry,
     SecurityTokenRegistryProxy,
     TokenLib,
+    TradingRestrictionManager,
     USDTieredSTO,
     USDTieredSTOFactory,
 } from "../../typechain-types";
 import { Addressable, BigNumberish, ContractFactory } from "ethers";
+import { TradingRestrictionManagerInterface } from "../../typechain-types/contracts/external/TradingRestrictionManager/TradingRestrictionManager";
 
 // Contract Instance Declaration
 let I_USDTieredSTOFactory: any;
@@ -59,6 +61,7 @@ let I_STRGetter: any;
 let I_STGetter: any;
 let I_USDOracle: any;
 let I_POLYOracle: any;
+let I_TradingRestrictionManager: any;
 
 // Initial fee for ticker registry and security token registry
 const initRegFee = ethers.parseEther("250");
@@ -94,6 +97,9 @@ async function setUpPolymathNetwork(account_polymath: string, token_owner: strin
     // STEP 10: Add dummy oracles
     await addOracles(account_polymath);
 
+    // STEP 11: External (add TradingRestriction Manager)
+    await deployTradingRestrictionManager(account_polymath, token_owner);
+
     const tempArray = [
         I_PolymathRegistry,
         I_PolyToken,
@@ -108,6 +114,7 @@ async function setUpPolymathNetwork(account_polymath: string, token_owner: strin
         I_STRProxied,
         I_STRGetter,
         I_STGetter,
+        I_TradingRestrictionManager,
         I_USDOracle,
         I_POLYOracle,
     ];
@@ -127,6 +134,14 @@ async function addOracles(account_polymath: string): Promise<void> {
     await I_PolymathRegistry.changeAddress("EthUsdOracle", I_USDOracle.target);
     await I_PolymathRegistry.changeAddress("PolyUsdOracle", I_POLYOracle.target);
     await I_PolymathRegistry.changeAddress("StablePolyUsdOracle", I_USDOracle.target);
+}
+
+async function deployTradingRestrictionManager(account_polymath: string, token_owner: string): Promise<[TradingRestrictionManager]> {
+    // Step 0: Deploy the PolymathRegistry
+    const TradingRestrictionManager = await ethers.getContractFactory("TradingRestrictionManager");
+    I_TradingRestrictionManager = await TradingRestrictionManager.deploy();
+
+    return [I_TradingRestrictionManager];
 }
 
 async function deployPolyRegistryAndPolyToken(account_polymath: string, token_owner: string): Promise<[PolymathRegistry, PolyTokenFaucet]> {

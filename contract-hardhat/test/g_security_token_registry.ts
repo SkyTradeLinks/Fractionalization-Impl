@@ -1373,14 +1373,13 @@ describe("SecurityTokenRegistry", function() {
             let tickerRegFee = await I_STRProxied.getUintValue(ethers.keccak256(ethers.toUtf8Bytes("tickerRegFee")));
             assert.equal(tickerRegFee.toString(), newFee.toString());
             console.log(`Ticker registration fee changed to on script: ${newFee.toString()}`);
-
-            const fee = await I_STRProxied.getTickerRegistrationFee.staticCall();
-            console.log(fee, "fee");
         });
 
-        // FEE ISSUE
+        // FEE IN POLY TERMS, NOT IN ETH
         it("Should fail to register the ticker with the old fee", async () => {
-            await I_PolyToken.connect(token_owner).approve(I_STRProxied.target, initRegFeePOLY);
+            await I_PolyToken.connect(token_owner).approve(I_STRProxied.target, ethers.parseEther("0.2")); // because Fee is in POLY AND NOT ETH
+            const allowance = await I_PolyToken.allowance(token_owner.address, await I_STRProxied.getAddress());
+            console.log(allowance, "allowance");
             await expect(
                 I_STRProxied.connect(token_owner).registerNewTicker(token_owner.address, "POLY"),
                 "tx revert -> failed because of ticker registeration fee gets change"
@@ -1419,9 +1418,8 @@ describe("SecurityTokenRegistry", function() {
             expect(eventFound).to.be.true;
         });
 
-        // FEE ISSUE
         it("Should fail to launch the securityToken with the old launch fee", async () => {
-            await I_PolyToken.connect(token_owner).approve(await I_STRProxied.getAddress(), initRegFeePOLY);
+            await I_PolyToken.connect(token_owner).approve(await I_STRProxied.getAddress(), ethers.parseEther("0.2")); // because Fee is in POLY AND NOT ETH
             await catchRevert(
                 I_STRProxied.connect(token_owner).generateNewSecurityToken("Polymath", "POLY", tokenDetails, false, token_owner.address, 0),
                 "tx revert -> failed because of old launch fee"

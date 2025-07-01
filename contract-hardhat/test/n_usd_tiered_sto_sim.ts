@@ -13,6 +13,9 @@ import Web3 from "web3";
 
 const web3 = new Web3("http://localhost:8545"); // Hardcoded development port
 
+const GAS_PRICE = process.env.COVERAGE === "true" ? 1n : 10000000000n; // 10 GWEI
+
+
 //const TOLERANCE = 2; // Allow balances to be off by 2 WEI for rounding purposes
 
 describe("USDTieredSTO Sim", function() {
@@ -30,7 +33,7 @@ describe("USDTieredSTO Sim", function() {
     let NOTAPPROVED: HardhatEthersSigner;
     let accounts: HardhatEthersSigner[];
 
-    const GAS_PRICE = 10000000000n; // 10 GWEI
+    console.log(process.env.COVERAGE, "process.env.COVERAGE");
 
     // Contract Instance Declaration
     let I_GeneralTransferManagerFactory: any;
@@ -660,7 +663,7 @@ describe("USDTieredSTO Sim", function() {
                     await I_DaiToken.connect(POLYMATH).getTokens(investment_DAI, _investor.address);
                     await I_DaiToken.connect(_investor).approve(I_USDTieredSTO_Array[stoId].target, investment_DAI);
                     await expect(
-                        I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, { gasPrice: GAS_PRICE })
+                        I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, [ethers.ZeroHash], 0, false, 0, { gasPrice: GAS_PRICE })
                     ).to.be.reverted;
                 } else
                     await expect(
@@ -735,7 +738,7 @@ describe("USDTieredSTO Sim", function() {
                         `buyWithPOLY: ${investment_Token / e18} tokens for ${investment_POLY / e18} POLY by ${_investor.address}`
                     );
                 } else if (isDai && investment_DAI > 10n) {
-                    tx = await I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, { gasPrice: GAS_PRICE });
+                    tx = await I_USDTieredSTO_Array[stoId].connect(_investor).buyWithUSD(_investor.address, investment_DAI, I_DaiToken.target, [ethers.ZeroHash], 0, false, 0, { gasPrice: GAS_PRICE });
                     const receipt = await tx.wait();
                     gasCost = receipt!.gasUsed * GAS_PRICE;
                     console.log(
