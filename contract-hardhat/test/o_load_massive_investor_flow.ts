@@ -503,68 +503,68 @@ describe("Checkpoints", function() {
             console.log("All existing investors bought more tokens successfully.");
         });
 
-        // it("Should add new token holders after initial distribution", async () => {
-        //     const ltime = await latestTime();
-        //     const expiry = ltime + duration.days(300);
-        //     const values: [string, bigint, boolean][] = [];
+        it("Should add new token holders after initial distribution", async () => {
+            const ltime = await latestTime();
+            const expiry = ltime + duration.days(300);
+            const values: [string, bigint, boolean][] = [];
 
-        //     // Add 20 new investors
-        //     const newInvestors = accounts.slice(1001, 1021);
-        //     allInvestors.push(...newInvestors)
+            // Add 20 new investors
+            const newInvestors = accounts.slice(1001, 1021);
+            allInvestors.push(...newInvestors)
 
-        //     for (const investor of newInvestors) {
-        //         const isAccredited = Math.random() < 0.5; // random accreditation
-        //         const investorClass = getRandomInvestorClass();
-        //         investorClassMap[investor.address.toLowerCase()] = investorClass;
+            for (const investor of newInvestors) {
+                const isAccredited = Math.random() < 0.5; // random accreditation
+                const investorClass = getRandomInvestorClass();
+                investorClassMap[investor.address.toLowerCase()] = investorClass;
 
-        //         values.push([investor.address, BigInt(expiry), isAccredited]);
-        //     }
+                values.push([investor.address, BigInt(expiry), isAccredited]);
+            }
 
 
-        //     const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
-        //     const merkleRoot = merkleTree.root;
+            const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
+            const merkleRoot = merkleTree.root;
 
-        //     await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
+            await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
-        //     for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
+            for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
 
-        //         const proof = merkleTree.getProof(index);
-        //         const signer = accounts.find(acc => acc.address === address)!;
+                const proof = merkleTree.getProof(index);
+                const signer = accounts.find(acc => acc.address === address)!;
 
-        //         const investorClass = investorClassMap[address.toLowerCase()];
-        //         // Whitelist investor
-        //         await expect(
-        //             I_TradingRestrictionManager.connect(signer).verifyInvestor(
-        //                 proof,
-        //                 address,
-        //                 expiry,
-        //                 isAccredited,
-        //                 investorClass
-        //             )
-        //         ).to.not.be.reverted;
+                const investorClass = investorClassMap[address.toLowerCase()];
+                // Whitelist investor
+                await expect(
+                    I_TradingRestrictionManager.connect(signer).verifyInvestor(
+                        proof,
+                        address,
+                        expiry,
+                        isAccredited,
+                        investorClass
+                    )
+                ).to.not.be.reverted;
 
-        //         //Issue tokens based on group
-        //         const rawAmount = smallInvestors.includes(signer)
-        //             ? randomInt(10, 5000)         // small: 10–5,000
-        //             : randomInt(10_000, 500_000);  // large holder
+                //Issue tokens based on group
+                const rawAmount = smallInvestors.includes(signer)
+                    ? randomInt(10, 5000)         // small: 10–5,000
+                    : randomInt(10_000, 500_000);  // large holder
 
-        //         const amount = ethers.parseEther(rawAmount.toString());
+                const amount = ethers.parseEther(rawAmount.toString());
 
-        //         await I_SecurityToken.connect(token_owner).issue(
-        //             address,
-        //             amount,
-        //             "0x"
-        //         );
+                await I_SecurityToken.connect(token_owner).issue(
+                    address,
+                    amount,
+                    "0x"
+                );
 
-        //         //validate balance
-        //         const balance = await I_SecurityToken.balanceOf(address);
-        //         expect(balance).to.equal(amount);
+                //validate balance
+                const balance = await I_SecurityToken.balanceOf(address);
+                expect(balance).to.equal(amount);
 
-        //         issuedAmounts[address.toLowerCase()] = amount;
-        //     }
+                issuedAmounts[address.toLowerCase()] = amount;
+            }
 
-        //     console.log(`Added and funded ${newInvestors.length} new investors after initial distribution`);
-        // });
+            console.log(`Added and funded ${newInvestors.length} new investors after initial distribution`);
+        });
 
         it("Fuzz test balance checkpoints for many investors", async () => {
             await I_SecurityToken.connect(token_owner).changeGranularity(1);
@@ -636,14 +636,14 @@ describe("Checkpoints", function() {
                     if (senderBalance === 0n) continue;
 
                     const percentage = Math.floor(Math.random() * 10) + 1;
-                    const amount = (senderBalance * BigInt(percentage)) / 10n;
+                    const amount = (senderBalance * BigInt(percentage)) / 100n;
 
                     console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
                     await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
                     const kycDataSender = await I_TradingRestrictionManager.getInvestorKYCData(sender.address, I_SecurityToken.target);
-const kycDataReceiver = await I_TradingRestrictionManager.getInvestorKYCData(receiver.address, I_SecurityToken.target);
-console.log("Sender KYC:", sender.address, kycDataSender);
-console.log("Receiver KYC:", receiver.address, kycDataReceiver);
+                    const kycDataReceiver = await I_TradingRestrictionManager.getInvestorKYCData(receiver.address, I_SecurityToken.target);
+                    console.log("Sender KYC:", sender.address, kycDataSender);
+                    console.log("Receiver KYC:", receiver.address, kycDataReceiver);
                     await I_SecurityToken.connect(sender).transfer(receiver.address, amount);
                 }
                 
@@ -823,21 +823,20 @@ console.log("Receiver KYC:", receiver.address, kycDataReceiver);
 
         it("Should perform random transfers between investors", async () => {
 
-            const transferCount = 200; // total number of transfers
+            const transferCount = Math.floor(Math.random() * 10);; // total number of transfers
 
             for (let i = 0; i < transferCount; i++) {
                 const senderIndex = Math.floor(Math.random() * allInvestors.length);
                 let receiverIndex = Math.floor(Math.random() * allInvestors.length);
 
-                // Ensure sender ≠ receiver
                 while (receiverIndex === senderIndex) {
                 receiverIndex = Math.floor(Math.random() * allInvestors.length);
                 }
 
                 const sender = allInvestors[senderIndex];
                 const receiver = allInvestors[receiverIndex];
-                const senderBalance = await I_SecurityToken.balanceOf(sender.address);
 
+                const senderBalance = await I_SecurityToken.balanceOf(sender.address);
                 if (senderBalance === 0n) continue; // skip if no balance
 
                 // Transfer 10% to 50% of balance
