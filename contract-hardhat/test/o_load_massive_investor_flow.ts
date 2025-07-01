@@ -639,6 +639,7 @@ describe("Checkpoints", function() {
                     const amount = (senderBalance * BigInt(percentage)) / 10n;
 
                     console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
+                    await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
                     const kycDataSender = await I_TradingRestrictionManager.getInvestorKYCData(sender.address, I_SecurityToken.target);
 const kycDataReceiver = await I_TradingRestrictionManager.getInvestorKYCData(receiver.address, I_SecurityToken.target);
 console.log("Sender KYC:", sender.address, kycDataSender);
