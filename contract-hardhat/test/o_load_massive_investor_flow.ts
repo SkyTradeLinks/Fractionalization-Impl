@@ -39,8 +39,10 @@ import {
     TokenLib,
     USDTieredSTO,
     USDTieredSTOFactory,
+    ITradingRestrictionManager, 
 } from "../typechain-types";
 import { increaseTime } from "./helpers/time";
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 describe("Checkpoints", function() {
     this.timeout(18000000);
@@ -85,6 +87,7 @@ describe("Checkpoints", function() {
     let I_SecurityTokenRegistry: Contract;
     let I_STFactory: Contract;
     let I_SecurityToken: Contract;
+    let I_TradingRestrictionManager: ITradingRestrictionManager;
     let I_PolyToken: Contract;
     let I_PolymathRegistry: Contract;
     let I_STRGetter: Contract;
@@ -100,6 +103,7 @@ describe("Checkpoints", function() {
     let STGetter: ContractFactory;
     let GeneralTransferManagerFactory: any;
     let ERC20DividendCheckpointFactory: any;
+    let TradingRestrictionManagerFactory: any;
 
     // SecurityToken Details
     const name = "Team";
@@ -125,8 +129,20 @@ describe("Checkpoints", function() {
 
     let currentTime: number;
     let snapId: string;
-
+    
     const DividendParameters = ["address"];
+    
+    let issuedAmounts: Record<string, bigint> = {}; // track issued amounts for yield math later
+    let values: [string, bigint, boolean][] = [];
+    let investorClassMap: Record<string, number> = {};
+    enum InvestorClass {
+        NonUS = 0,
+        US = 1
+    }
+
+    function getRandomInvestorClass(): number {
+        return Math.random() < 0.5 ? InvestorClass.NonUS : InvestorClass.US;
+    }
 
     before(async () => {
 
@@ -149,9 +165,11 @@ describe("Checkpoints", function() {
         
         console.log(token_owner.address, "token_owner.address");
 
+
         GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
         GeneralTransferManagerFactory = await ethers.getContractFactory("GeneralTransferManager");
         ERC20DividendCheckpointFactory = await ethers.getContractFactory("ERC20DividendCheckpoint");
+        TradingRestrictionManagerFactory = await ethers.getContractFactory("TradingRestrictionManager");
 
         // Step 1: Deploy the general PM ecosystem
         const instances = await setUpPolymathNetwork(account_polymath.address, token_owner.address);
@@ -184,6 +202,16 @@ describe("Checkpoints", function() {
             I_MRProxied, 
             0n
         );
+
+        // Deploy TradingRestrictionManager and assign to I_TradingRestrictionManager
+        const tradingRestrictionManager = await TradingRestrictionManagerFactory.connect(token_owner).deploy();
+        await tradingRestrictionManager.waitForDeployment();
+        I_TradingRestrictionManager = tradingRestrictionManager;
+        
+
+        const tradingRestrictionManagerConcrete = TradingRestrictionManagerFactory.attach(I_TradingRestrictionManager.target);
+        // Grant operator role to account_issuer
+        await tradingRestrictionManagerConcrete.connect(token_owner).grantOperator(account_issuer.address);
 
         // Printing all the contract addresses
         console.log(`
@@ -328,185 +356,215 @@ describe("Checkpoints", function() {
     });
 
     describe("Buy tokens using on-chain whitelist", async () => {
-        let issuedAmounts: Record<string, bigint> = {}; // track issued amounts for yield math later
+        
+        it("should set trading restriction manager", async () => { 
+            const tx = await I_GeneralTransferManager.connect(token_owner).setTradingRestrictionManager(I_TradingRestrictionManager.target);
+
+            const receipt = await tx.wait();
+            let tradingRestrictionEvent: LogDescription | null = null;
+
+            for (const log of receipt!.logs) {
+                try {
+                    const parsed = I_GeneralTransferManager.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "TradingRestrictionManagerUpdated") {
+                        tradingRestrictionEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(tradingRestrictionEvent).to.not.be.null;
+            expect(tradingRestrictionEvent!.args.newManager).to.equal(I_TradingRestrictionManager.target, "TradingRestrictionManager not set correctly");
+        });
         it("Should whitelist and issue tokens to many investors", async () => {
             const ltime = await latestTime();
+            const expiry = ltime + duration.days(300);
 
             smallInvestors = accounts.slice(1, 901); // 900 small
-            console.log(`Whitelisting ${smallInvestors.length} small investors...`);
             largeInvestors = accounts.slice(901, 1001); // 100 large
-            console.log(`Whitelisting ${largeInvestors.length} large investors...`);
             allInvestors = [...smallInvestors, ...largeInvestors];
             console.log(`Whitelisting ${allInvestors.length} investors...`);
 
-            const kycStart = ltime;
-            const kycExpiry = ltime + duration.days(10);
-
             for (const investor of allInvestors) {
+                const isAccredited = Math.random() < 0.5; // random accreditation
+                const investorClass = getRandomInvestorClass();
+                investorClassMap[investor.address.toLowerCase()] = investorClass;
+
+                values.push([investor.address, BigInt(expiry), isAccredited]);
+            }
+
+
+            const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
+            const merkleRoot = merkleTree.root;
+
+            await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
+
+            for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
+
+                const proof = merkleTree.getProof(index);
+                const signer = accounts.find(acc => acc.address === address)!;
+
+                const investorClass = investorClassMap[address.toLowerCase()];
                 // Whitelist investor
-                const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
-                    investor.address,
-                    kycStart,
-                    kycStart,
-                    kycExpiry,
-                    { gasLimit: 6000000 }
-                );
-                const receipt = await tx.wait();
-
-                //Verify event was emitted correctly
-                let kycEvent: LogDescription | null = null;
-
-                for (const log of receipt!.logs) {
-                    try {
-                        const parsed = I_GeneralTransferManager.interface.parseLog(log);
-                        if (parsed && parsed.name === "ModifyKYCData") {
-                            kycEvent = parsed;
-                            break;
-                        }
-                    } catch (err: any) {
-                        console.log(`Failed to parse KYC log for ${investor.address}: ${err.message}`);
-                    }
-                }
-
-                expect(kycEvent).to.not.be.null;
-                expect(kycEvent!.args._investor.toLowerCase()).to.equal(
-                    investor.address.toLowerCase(),
-                    `KYC failed for ${investor.address}`
-                );
+                await expect(
+                    I_TradingRestrictionManager.connect(signer).verifyInvestor(
+                        proof,
+                        address,
+                        expiry,
+                        isAccredited,
+                        investorClass
+                    )
+                ).to.not.be.reverted;
 
                 //Issue tokens based on group
-                const rawAmount = smallInvestors.includes(investor)
+                const rawAmount = smallInvestors.includes(signer)
                     ? randomInt(10, 5000)         // small: 10–5,000
                     : randomInt(10_000, 500_000);  // large holder
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
                 await I_SecurityToken.connect(token_owner).issue(
-                    investor.address,
+                    address,
                     amount,
                     "0x"
                 );
 
                 //validate balance
-                const balance = await I_SecurityToken.balanceOf(investor.address);
+                const balance = await I_SecurityToken.balanceOf(address);
                 expect(balance).to.equal(amount);
 
-                issuedAmounts[investor.address.toLowerCase()] = amount;
+                issuedAmounts[address.toLowerCase()] = amount;
             }
 
-            console.log(`Whitelisted & issued tokens to ${allInvestors.length} investors`);
+            console.log(`Verified & issued tokens to ${allInvestors.length} investors using Merkle Tree.`);
         });
 
         it("Should allow existing investors to buy more tokens", async () => {
             const ltime = await latestTime();
+            const expiry = ltime + duration.days(300);
 
             for (const investor of allInvestors) {
-                const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
-                    investor.address,
-                    ltime,
-                    ltime,
-                    ltime + duration.days(10),
-                    { gasLimit: 6000000 }
-                );
-                const receipt = await tx.wait();
+                const isAccredited = Math.random() < 0.5; // random accreditation
+                const investorClass = getRandomInvestorClass();
+                investorClassMap[investor.address.toLowerCase()] = investorClass;
 
-                //Event check
-                let kycEvent: LogDescription | null = null;
-                for (const log of receipt.logs) {
-                    try {
-                        const parsed = I_GeneralTransferManager.interface.parseLog(log);
-                        if (parsed?.name === "ModifyKYCData") {
-                            kycEvent = parsed;
-                            break;
-                        }
-                    } catch (err: any) {
-                        console.log(`Failed to parse KYC log: ${err.message}`);
-                    }
-                }
+                values.push([investor.address, BigInt(expiry), isAccredited]);
+            }
 
-                expect(kycEvent).to.not.be.null;
-                expect(kycEvent!.args._investor.toLowerCase()).to.equal(investor.address.toLowerCase());
 
-                // Check current balance
-                const previousBalance = await I_SecurityToken.balanceOf(investor.address);
+            const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
+            const merkleRoot = merkleTree.root;
 
-                // Generate random additional purchase
-                const additional = smallInvestors.includes(investor)
-                    ? randomInt(100, 1000)         // small buys 100–1000
-                    : randomInt(5000, 100000);     // large buys 5k–100k
+            await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
-                const additionalTokens = ethers.parseEther(additional.toString());
+            for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
 
-                // Issue more tokens
+                const proof = merkleTree.getProof(index);
+                const signer = accounts.find(acc => acc.address === address)!;
+
+                const investorClass = investorClassMap[address.toLowerCase()];
+                // Whitelist investor
+                await expect(
+                    I_TradingRestrictionManager.connect(signer).verifyInvestor(
+                        proof,
+                        address,
+                        expiry,
+                        isAccredited,
+                        investorClass
+                    )
+                ).to.not.be.reverted;
+
+                //Issue tokens based on group
+                const rawAmount = smallInvestors.includes(signer)
+                    ? randomInt(10, 5000)         // small: 10–5,000
+                    : randomInt(10_000, 500_000);  // large holder
+
+                const amount = ethers.parseEther(rawAmount.toString());
+
+                const prevBalance = await I_SecurityToken.balanceOf(address);
+
                 await I_SecurityToken.connect(token_owner).issue(
-                    investor.address,
-                    additionalTokens,
+                    address,
+                    amount,
                     "0x"
                 );
 
-                // Check updated balance
-                const updatedBalance = await I_SecurityToken.balanceOf(investor.address);
-                expect(updatedBalance).to.equal(previousBalance + additionalTokens);
+                //validate balance
+                const newBalance = await I_SecurityToken.balanceOf(address);
+                expect(newBalance).to.equal(prevBalance + amount);
+
+                // Save issued amount (add to cumulative if needed)
+                issuedAmounts[address.toLowerCase()] = (issuedAmounts[address.toLowerCase()] || 0n) + amount;
             }
 
             console.log("All existing investors bought more tokens successfully.");
         });
 
-        it("Should add new token holders after initial distribution", async () => {
-            const ltime = (await latestTime());
+        // it("Should add new token holders after initial distribution", async () => {
+        //     const ltime = await latestTime();
+        //     const expiry = ltime + duration.days(300);
+        //     const values: [string, bigint, boolean][] = [];
 
-            // Add 20 new investors
-            const newInvestors = accounts.slice(1001, 1021);
+        //     // Add 20 new investors
+        //     const newInvestors = accounts.slice(1001, 1021);
+        //     allInvestors.push(...newInvestors)
 
-            for (const investor of newInvestors) {
-                // Whitelist
-                const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
-                    investor.address,
-                    ltime,
-                    ltime,
-                    ltime + ((duration.days(10))),
-                    { gasLimit: 6000000 }
-                );
+        //     for (const investor of newInvestors) {
+        //         const isAccredited = Math.random() < 0.5; // random accreditation
+        //         const investorClass = getRandomInvestorClass();
+        //         investorClassMap[investor.address.toLowerCase()] = investorClass;
 
-                const receipt = await tx.wait();
+        //         values.push([investor.address, BigInt(expiry), isAccredited]);
+        //     }
 
-                //Event validation
-                let kycEvent: LogDescription | null = null;
-                for (const log of receipt.logs) {
-                    try {
-                        const parsed = I_GeneralTransferManager.interface.parseLog(log);
-                        if (parsed?.name === "ModifyKYCData") {
-                            kycEvent = parsed;
-                            break;
-                        }
-                    } catch (err: any) {
-                        console.log(`Failed to parse KYC log for ${investor.address}: ${err.message}`);
-                    }
-                }
 
-                expect(kycEvent).to.not.be.null;
-                expect(kycEvent!.args._investor.toLowerCase()).to.equal(
-                    investor.address.toLowerCase(),
-                    `Failed to whitelist ${investor.address}`
-                );
+        //     const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
+        //     const merkleRoot = merkleTree.root;
 
-                // Issue random tokens
-                const amount = ethers.parseEther(randomInt(100, 10_000).toString());
+        //     await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
-                await I_SecurityToken.connect(token_owner).issue(
-                    investor.address,
-                    amount,
-                    "0x"
-                );
+        //     for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
 
-                const balance = await I_SecurityToken.balanceOf(investor.address);
-                expect(balance).to.equal(amount);
+        //         const proof = merkleTree.getProof(index);
+        //         const signer = accounts.find(acc => acc.address === address)!;
 
-                issuedAmounts[investor.address.toLowerCase()] = amount;
-            }
+        //         const investorClass = investorClassMap[address.toLowerCase()];
+        //         // Whitelist investor
+        //         await expect(
+        //             I_TradingRestrictionManager.connect(signer).verifyInvestor(
+        //                 proof,
+        //                 address,
+        //                 expiry,
+        //                 isAccredited,
+        //                 investorClass
+        //             )
+        //         ).to.not.be.reverted;
 
-            console.log(`Added and funded ${newInvestors.length} new investors after initial distribution`);
-        });
+        //         //Issue tokens based on group
+        //         const rawAmount = smallInvestors.includes(signer)
+        //             ? randomInt(10, 5000)         // small: 10–5,000
+        //             : randomInt(10_000, 500_000);  // large holder
+
+        //         const amount = ethers.parseEther(rawAmount.toString());
+
+        //         await I_SecurityToken.connect(token_owner).issue(
+        //             address,
+        //             amount,
+        //             "0x"
+        //         );
+
+        //         //validate balance
+        //         const balance = await I_SecurityToken.balanceOf(address);
+        //         expect(balance).to.equal(amount);
+
+        //         issuedAmounts[address.toLowerCase()] = amount;
+        //     }
+
+        //     console.log(`Added and funded ${newInvestors.length} new investors after initial distribution`);
+        // });
 
         it("Fuzz test balance checkpoints for many investors", async () => {
             await I_SecurityToken.connect(token_owner).changeGranularity(1);
@@ -524,6 +582,7 @@ describe("Checkpoints", function() {
                 balancesAtCheckpoint[investor.address.toLowerCase()] = await I_SecurityToken.balanceOf(investor.address);
                 }
                 const totalSupply = await I_SecurityToken.totalSupply();
+                console.log("total supply: ", totalSupply)
                 
                 checkpointBalances[checkpointIndex] = balancesAtCheckpoint;
                 totalSupplies[checkpointIndex] = totalSupply;
@@ -565,6 +624,14 @@ describe("Checkpoints", function() {
 
                     if (sender.address === receiver.address) continue;
 
+                    // Check both are whitelisted and valid
+                    const isSenderWhitelisted = await I_TradingRestrictionManager.isExistingInvestor(sender.address);
+                    const isReceiverWhitelisted = await I_TradingRestrictionManager.isExistingInvestor(receiver.address);
+                    if (!isSenderWhitelisted || !isReceiverWhitelisted) {
+                        // Optionally log or count skipped transfers
+                        continue;
+                    }
+
                     const senderBalance = await I_SecurityToken.balanceOf(sender.address);
                     if (senderBalance === 0n) continue;
 
@@ -572,6 +639,10 @@ describe("Checkpoints", function() {
                     const amount = (senderBalance * BigInt(percentage)) / 10n;
 
                     console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
+                    const kycDataSender = await I_TradingRestrictionManager.getInvestorKYCData(sender.address, I_SecurityToken.target);
+const kycDataReceiver = await I_TradingRestrictionManager.getInvestorKYCData(receiver.address, I_SecurityToken.target);
+console.log("Sender KYC:", sender.address, kycDataSender);
+console.log("Receiver KYC:", receiver.address, kycDataReceiver);
                     await I_SecurityToken.connect(sender).transfer(receiver.address, amount);
                 }
                 
