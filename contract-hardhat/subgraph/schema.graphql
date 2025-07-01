@@ -9,7 +9,6 @@ type USDTieredSTOFactory @entity {
   timestamp: BigInt!
   from: Bytes!
 }
-
 type ERC20DividendCheckpointFactory @entity {
   id: ID!
   module: Bytes!
@@ -21,7 +20,6 @@ type ERC20DividendCheckpointFactory @entity {
   timestamp: BigInt!
   from: Bytes!
 }
-
 type GeneralTransferManagerFactory @entity {
   id: ID!
   module: Bytes!
@@ -33,7 +31,6 @@ type GeneralTransferManagerFactory @entity {
   timestamp: BigInt!
   from: Bytes!
 }
-
 type SecurityTokenFactory @entity {
   id: ID!
   version: String! # string
@@ -45,7 +42,6 @@ type SecurityTokenFactory @entity {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
-
 type SecurityToken @entity {
   id: ID!
   ticker: String!
@@ -63,7 +59,6 @@ type SecurityToken @entity {
   claimedDividends: [ERC20DividendClaimed!]! @derivedFrom(field: "token")
   userDividends: [UserDividend!]! @derivedFrom(field: "token")
 }
-
 type Transfer @entity {
   id: ID!
   token: SecurityToken!
@@ -74,7 +69,6 @@ type Transfer @entity {
   blockNumber: BigInt!
   timestamp: BigInt!
 }
-
 type Account @entity {
   id: ID! # Address of the user
   tokenBalances: [TokenBalance!]! @derivedFrom(field: "user")
@@ -82,23 +76,20 @@ type Account @entity {
   checkpointBalances: [CheckpointBalance!]! @derivedFrom(field: "user")
   userDividends: [UserDividend!]! @derivedFrom(field: "user")
 }
-
 type AccountUser @entity {
   id: ID! # Address of the user
   user: [String!]! # Address of the user
 }
-
 type UserDividend @entity {
   id: ID!
   user: Account!
-  claim: BigInt! 
-  creationUnixTimestamp: BigInt! 
+  claim: BigInt!
+  creationUnixTimestamp: BigInt!
   totalClaimableAmount: BigInt!
-  transactionHash: Bytes! 
+  transactionHash: Bytes!
   withheld: BigInt!
   token: SecurityToken!
 }
-
 type TokenBalance @entity {
   id: ID! # Unique (userAddress-tokenAddress)
   user: Account!
@@ -107,7 +98,6 @@ type TokenBalance @entity {
   checkpointBalances: [CheckpointBalance!]! @derivedFrom(field: "tokenBalance")
   dividendAmount: BigInt! # Total dividends earned per token
 }
-
 type CheckpointBalance @entity {
   id: ID!
   tokenBalance: TokenBalance!
@@ -117,13 +107,11 @@ type CheckpointBalance @entity {
   timestamp: BigInt!
   blockNumber: BigInt!
 }
-
 type Aggregate @entity {
   id: ID!
   currentCheckpoint: BigInt!
   currentDividendId: BigInt!
 }
-
 type ERC20DividendClaimed @entity {
   id: ID!
   payee: Account!
@@ -136,7 +124,6 @@ type ERC20DividendClaimed @entity {
   timestamp: BigInt!
   transactionHash: Bytes!
 }
-
 type TokenPurchase @entity {
   id: ID!
   contractAddress: Bytes!
@@ -148,7 +135,6 @@ type TokenPurchase @entity {
   tier: BigInt!
   timestamp: BigInt!
 }
-
 type ERC20DividendDeposited @entity {
   id: ID!
   depositor: Bytes!
@@ -164,15 +150,40 @@ type ERC20DividendDeposited @entity {
   paymentToken: Bytes!
   token: SecurityToken!
 }
-
 type EpnsNotificationCounter @entity {
   id: ID!
   totalCount: BigInt!
 }
-
 type EpnsPushNotification @entity {
   id: ID!
   notificationNumber: BigInt!
   recipient: String!
   notification: String!
+}
+type UserTokenDividendAggregate @entity {
+  id: ID!                  # "{user}-{token}"
+  user: Account!
+  token: SecurityToken!
+  totalClaim: BigInt!
+  totalEntitled: BigInt!
+}
+type MonthlyPurchaseAggregate @entity {
+  id: ID!
+  token: SecurityToken!
+  year: Int!
+  month: Int!
+  totalUsd: BigInt!
+}
+type MonthlyDividendAggregate @entity {
+  id: ID!
+  token: SecurityToken!
+  year: Int!
+  month: Int!
+  totalDividends: BigInt!
+}
+type UserTokenPurchaseAggregate @entity {
+  id: ID!
+  user: Account!
+  token: SecurityToken!
+  totalPurchased: BigInt!
 }
