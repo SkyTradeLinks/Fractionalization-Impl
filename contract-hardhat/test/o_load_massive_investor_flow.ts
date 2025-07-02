@@ -5,7 +5,7 @@ import { Contract, ContractFactory, LogDescription } from "ethers";
 
 import { latestTime } from "./helpers/latestTime";
 import { duration } from "./helpers/utils";
-import { deployERC20DividendAndVerifyed, setUpPolymathNetwork } from "./helpers/createInstances";
+import { deployERC20DividendAndVerifyed, deployUSDTieredSTOAndVerified, setUpPolymathNetwork } from "./helpers/createInstances";
 import { initializeContracts } from "../scripts/polymath-deploy";
 import { randomInt } from "crypto";
 
@@ -43,6 +43,61 @@ import {
 } from "../typechain-types";
 import { increaseTime } from "./helpers/time";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
+
+const functionSignature = {
+        name: "configure",
+        type: "function",
+        inputs: [
+            {
+                type: "uint256",
+                name: "_startTime"
+            },
+            {
+                type: "uint256",
+                name: "_endTime"
+            },
+            {
+                type: "uint256[]",
+                name: "_ratePerTier"
+            },
+            {
+                type: "uint256[]",
+                name: "_ratePerTierDiscountPoly"
+            },
+            {
+                type: "uint256[]",
+                name: "_tokensPerTier"
+            },
+            {
+                type: "uint256[]",
+                name: "_tokensPerTierDiscountPoly"
+            },
+            {
+                type: "uint256",
+                name: "_nonAccreditedLimitUSD"
+            },
+            {
+                type: "uint256",
+                name: "_minimumInvestmentUSD"
+            },
+            {
+                type: "uint8[]",
+                name: "_fundRaiseTypes"
+            },
+            {
+                type: "address",
+                name: "_wallet"
+            },
+            {
+                type: "address",
+                name: "_treasuryWallet"
+            },
+            {
+                type: "address[]",
+                name: "_usdTokens"
+            }
+        ]
+    };
 
 describe("Checkpoints", function() {
     this.timeout(18000000);
@@ -93,6 +148,9 @@ describe("Checkpoints", function() {
     let I_STRGetter: Contract;
     let I_STGetter: Contract;
     let stGetter: Contract;
+    let I_DaiToken: any;
+    let PolyTokenFaucetFactory: any;
+    let I_USDTieredSTOFactory: any;
     
     
     
@@ -112,11 +170,32 @@ describe("Checkpoints", function() {
     const decimals = 18;
     const contact = "team@polymath.network";
 
+    // STO Configuration Arrays
+    let _startTime: bigint[] = [];
+    let _endTime: bigint[] = [];
+    let _ratePerTier: bigint[] = [];
+    let _ratePerTierDiscountPoly: bigint[] = [];
+    let _tokensPerTierTotal: bigint[] = [];
+    let _tokensPerTierDiscountPoly: bigint[] = [];
+    let _nonAccreditedLimitUSD: bigint[] = [];
+    let _minimumInvestmentUSD: bigint[] = [];
+    let _fundRaiseTypes: number[] = [];
+    let _wallet: string[] = [];
+    let _treasuryWallet: string[] = [];
+    let _usdToken: string[] = [];
+    let I_USDTieredSTO_Array: Contract[] = [];
+
+    let ETH = 0;
+    let POLY = 1;
+    let DAI = 2;
+
     // Module key
     const delegateManagerKey = 1;
     const transferManagerKey = 2;
     const stoKey = 3;
     const checkpointKey = 4;
+    const STOKEY = 3;
+    const STOSetupCost = 0;
 
     // Manager details
     const managerDetails = ethers.encodeBytes32String("Hello");
@@ -135,6 +214,9 @@ describe("Checkpoints", function() {
     let issuedAmounts: Record<string, bigint> = {}; // track issued amounts for yield math later
     let values: [string, bigint, boolean][] = [];
     let investorClassMap: Record<string, number> = {};
+    let e18: bigint;
+    let e16: bigint;
+    let ltime;
     enum InvestorClass {
         NonUS = 0,
         US = 1
@@ -142,6 +224,34 @@ describe("Checkpoints", function() {
 
     function getRandomInvestorClass(): number {
         return Math.random() < 0.5 ? InvestorClass.NonUS : InvestorClass.US;
+    }
+
+    async function convert(_stoID: number, _tier: number, _discount: boolean, _currencyFrom: string, _currencyTo: string, _amount: bigint): Promise<bigint> {
+        let USDTOKEN: bigint;
+        if (_discount) USDTOKEN = (await I_USDTieredSTO_Array[_stoID].tiers(_tier))[1];
+        else USDTOKEN = (await I_USDTieredSTO_Array[_stoID].tiers(_tier))[0];
+        console.log(`USDTOKEN: ${USDTOKEN}`);
+        
+        if (_currencyFrom == "TOKEN") {
+            let tokenToUSD = (_amount * USDTOKEN) / e18;
+            if (_currencyTo == "USD") return tokenToUSD;
+            if (_currencyTo == "ETH") {
+                return await I_USDTieredSTO_Array[_stoID].convertFromUSD.staticCall(ETH, tokenToUSD);
+            } else if (_currencyTo == "POLY") {
+                return await I_USDTieredSTO_Array[_stoID].convertFromUSD.staticCall(POLY, tokenToUSD);
+            }
+        }
+        if (_currencyFrom == "USD") {
+            if (_currencyTo == "TOKEN") return (_amount / USDTOKEN) * e18; // USD / USD/TOKEN = TOKEN
+            if (_currencyTo == "ETH" || _currencyTo == "POLY")
+                return await I_USDTieredSTO_Array[_stoID].convertFromUSD.staticCall(_currencyTo == "ETH" ? ETH : POLY, _amount);
+        }
+        if (_currencyFrom == "ETH" || _currencyFrom == "POLY") {
+            let ethToUSD = await I_USDTieredSTO_Array[_stoID].convertToUSD.staticCall(_currencyTo == "ETH" ? ETH : POLY, _amount);
+            if (_currencyTo == "USD") return ethToUSD;
+            if (_currencyTo == "TOKEN") return (ethToUSD / USDTOKEN) * e18; // USD / USD/TOKEN = TOKEN
+        }
+        return 0n;
     }
 
     before(async () => {
@@ -162,6 +272,10 @@ describe("Checkpoints", function() {
         wallet = accounts[3];
         account_manager = accounts[5];
         account_controller = accounts[3];
+
+        ltime = await latestTime() + duration.days(300);
+        e18 = 10n ** 18n;
+        e16 = 10n ** 16n;
         
         console.log(token_owner.address, "token_owner.address");
 
@@ -170,6 +284,7 @@ describe("Checkpoints", function() {
         GeneralTransferManagerFactory = await ethers.getContractFactory("GeneralTransferManager");
         ERC20DividendCheckpointFactory = await ethers.getContractFactory("ERC20DividendCheckpoint");
         TradingRestrictionManagerFactory = await ethers.getContractFactory("TradingRestrictionManager");
+        PolyTokenFaucetFactory = await ethers.getContractFactory("PolyTokenFaucet");
 
         // Step 1: Deploy the general PM ecosystem
         const instances = await setUpPolymathNetwork(account_polymath.address, token_owner.address);
@@ -190,6 +305,9 @@ describe("Checkpoints", function() {
             I_STGetter
         ] = instances;
 
+        I_DaiToken = await PolyTokenFaucetFactory.connect(account_polymath).deploy();
+        await I_DaiToken.waitForDeployment();
+
         // Deploy ERC20DividendCheckpoint factories
         [P_ERC20DividendCheckpointFactory] = await deployERC20DividendAndVerifyed(
             account_polymath.address,
@@ -208,6 +326,8 @@ describe("Checkpoints", function() {
         await tradingRestrictionManager.waitForDeployment();
         I_TradingRestrictionManager = tradingRestrictionManager;
         
+        //Deploy the USDTieredSTOFactory
+        [I_USDTieredSTOFactory] = await deployUSDTieredSTOAndVerified(account_polymath.address, I_MRProxied, STOSetupCost);
 
         const tradingRestrictionManagerConcrete = TradingRestrictionManagerFactory.attach(I_TradingRestrictionManager.target);
         // Grant operator role to account_issuer
@@ -224,7 +344,9 @@ describe("Checkpoints", function() {
         FeatureRegistry:                   ${I_FeatureRegistry.target}
 
         STFactory:                         ${I_STFactory.target}
-        GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.target}
+        TradingRestrictionManager:         ${I_TradingRestrictionManager.target}
+        USDTieredSTOFactory:               ${I_USDTieredSTOFactory.target}
+        ERC20DividendCheckpointFactory:    ${I_ERC20DividendCheckpointFactory.target}
         -----------------------------------------------------------------------------
         `);
     });
@@ -325,6 +447,72 @@ describe("Checkpoints", function() {
             I_GeneralTransferManager = GeneralTransferManager.attach(moduleData[0]);
         });
 
+        it("Should successfully attach the first STO module to the security token", async () => {
+            const stoId = 0; // No discount
+
+            _startTime.push(BigInt(await latestTime() + duration.days(1)));
+            _endTime.push(BigInt(ltime) + BigInt(duration.days(30)));
+            _ratePerTier.push([10n * e16, 15n * e16]); // [ 0.10 USD/Token, 0.15 USD/Token ]
+            _ratePerTierDiscountPoly.push([10n * e16, 15n * e16]); // [ 0.10 USD/Token, 0.15 USD/Token ]
+            _tokensPerTierTotal.push([100000000n * e18, 200000000n * e18]); // [ 100m Token, 200m Token ]
+            _tokensPerTierDiscountPoly.push([0n, 0n]); // [ 0, 0 ]
+            _nonAccreditedLimitUSD.push(10000n * e18); // 10k USD
+            _minimumInvestmentUSD.push(5n * e18); // 5 USD
+            _fundRaiseTypes.push([ETH, POLY, DAI]);
+            _wallet.push(account_issuer.address);
+            _treasuryWallet.push(account_issuer.address);
+            _usdToken.push([await I_DaiToken.getAddress()]);
+
+            const config = [
+                _startTime[stoId],
+                _endTime[stoId],
+                _ratePerTier[stoId],
+                _ratePerTierDiscountPoly[stoId],
+                _tokensPerTierTotal[stoId],
+                _tokensPerTierDiscountPoly[stoId],
+                _nonAccreditedLimitUSD[stoId],
+                _minimumInvestmentUSD[stoId],
+                _fundRaiseTypes[stoId],
+                _wallet[stoId],
+                _treasuryWallet[stoId],
+                _usdToken[stoId]
+            ];
+
+            const stoInterface = new ethers.Interface([functionSignature]);
+            const bytesSTO = stoInterface.encodeFunctionData("configure", config);
+            const tx = await I_SecurityToken.connect(token_owner).addModule(I_USDTieredSTOFactory.target, bytesSTO, 0n, 0n, false);
+            
+            const receipt = await tx.wait();
+            console.log(`Gas addModule: ${receipt.gasUsed}`);
+            
+            const moduleAddedEvent = receipt.logs.map(log => {
+                try { return I_SecurityToken.interface.parseLog(log); } catch { return null; }
+            }).find(e => e && e.name === 'ModuleAdded');
+
+            expect(moduleAddedEvent).to.not.be.null;
+            expect(moduleAddedEvent.args._types[0]).to.equal(STOKEY);
+            expect(ethers.decodeBytes32String(moduleAddedEvent.args._name).replace(/\u0000/g, '')).to.equal("USDTieredSTO");
+            
+            I_USDTieredSTO_Array.push(await ethers.getContractAt("USDTieredSTO", moduleAddedEvent.args._module));
+
+            expect(await I_USDTieredSTO_Array[stoId].startTime()).to.equal(_startTime[stoId]);
+            expect(await I_USDTieredSTO_Array[stoId].endTime()).to.equal(_endTime[stoId]);
+            for (var i = 0; i < _ratePerTier[stoId].length; i++) {
+                const tier = await I_USDTieredSTO_Array[stoId].tiers(i);
+                expect(tier[0]).to.equal(_ratePerTier[stoId][i]);
+                expect(tier[1]).to.equal(_ratePerTierDiscountPoly[stoId][i]);
+                expect(tier[2]).to.equal(_tokensPerTierTotal[stoId][i]);
+                expect(tier[3]).to.equal(_tokensPerTierDiscountPoly[stoId][i]);
+            }
+            expect(await I_USDTieredSTO_Array[stoId].nonAccreditedLimitUSD()).to.equal(_nonAccreditedLimitUSD[stoId]);
+            expect(await I_USDTieredSTO_Array[stoId].minimumInvestmentUSD()).to.equal(_minimumInvestmentUSD[stoId]);
+            expect(await I_USDTieredSTO_Array[stoId].wallet()).to.equal(_wallet[stoId]);
+            expect(await I_USDTieredSTO_Array[stoId].treasuryWallet()).to.equal(_treasuryWallet[stoId]);
+            expect((await I_USDTieredSTO_Array[stoId].getUsdTokens())[0]).to.equal(_usdToken[stoId][0]);
+            expect(await I_USDTieredSTO_Array[stoId].getNumberOfTiers()).to.equal(_tokensPerTierTotal[stoId].length);
+            expect((await I_USDTieredSTO_Array[stoId].getPermissions()).length).to.equal(2);
+        });
+
         it("Should successfully attach the ERC20DividendCheckpoint with the security token", async () => {
             const bytesDividend = encodeModuleCall(DividendParameters, [address_zero]);
             const tx = await I_SecurityToken.connect(token_owner).addModule(
@@ -380,8 +568,11 @@ describe("Checkpoints", function() {
             expect(tradingRestrictionEvent!.args.newManager).to.equal(I_TradingRestrictionManager.target, "TradingRestrictionManager not set correctly");
         });
         it("Should whitelist and issue tokens to many investors", async () => {
+            const stoId = 0;
             const ltime = await latestTime();
             const expiry = ltime + duration.days(300);
+            const daiAddress = await I_DaiToken.getAddress();
+            const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
 
             smallInvestors = accounts.slice(1, 901); // 900 small
             largeInvestors = accounts.slice(901, 1001); // 100 large
@@ -402,6 +593,8 @@ describe("Checkpoints", function() {
 
             await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
+            await increaseTime(duration.days(2));
+
             for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
 
                 const proof = merkleTree.getProof(index);
@@ -426,11 +619,24 @@ describe("Checkpoints", function() {
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
-                await I_SecurityToken.connect(token_owner).issue(
-                    address,
-                    amount,
-                    "0x"
-                );
+                // Convert token amount to DAI equivalent
+                const amountDAI = await convert(stoId, 0, false, "TOKEN", "USD", amount);
+
+                // Mint and approve DAI for investor
+                await I_DaiToken.getTokens(amountDAI, address);
+                await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                
+                await expect(
+                    I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
+                        address,
+                        amountDAI,
+                        daiAddress,
+                        proof,
+                        expiry,
+                        isAccredited,
+                        investorClass
+                    )
+                ).to.not.be.reverted;
 
                 //validate balance
                 const balance = await I_SecurityToken.balanceOf(address);
@@ -442,9 +648,12 @@ describe("Checkpoints", function() {
             console.log(`Verified & issued tokens to ${allInvestors.length} investors using Merkle Tree.`);
         });
 
-        it("Should allow existing investors to buy more tokens", async () => {
+        it("Should allow existing investors to buy more tokens using buyWithUSD", async () => {
+            const stoId = 0;
             const ltime = await latestTime();
             const expiry = ltime + duration.days(300);
+            const daiAddress = await I_DaiToken.getAddress();
+            const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
 
             for (const investor of allInvestors) {
                 const isAccredited = Math.random() < 0.5; // random accreditation
@@ -460,6 +669,8 @@ describe("Checkpoints", function() {
 
             await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
+            await increaseTime(duration.days(2));
+
             for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
 
                 const proof = merkleTree.getProof(index);
@@ -484,13 +695,26 @@ describe("Checkpoints", function() {
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
+                // Convert token amount to DAI equivalent
+                const amountDAI = await convert(stoId, 0, false, "TOKEN", "USD", amount);
+
+                // Mint and approve DAI for investor
+                await I_DaiToken.getTokens(amountDAI, address);
+                await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                
                 const prevBalance = await I_SecurityToken.balanceOf(address);
 
-                await I_SecurityToken.connect(token_owner).issue(
-                    address,
-                    amount,
-                    "0x"
-                );
+                await expect(
+                    I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
+                        address,
+                        amountDAI,
+                        daiAddress,
+                        proof,
+                        expiry,
+                        isAccredited,
+                        investorClass
+                    )
+                ).to.not.be.reverted;
 
                 //validate balance
                 const newBalance = await I_SecurityToken.balanceOf(address);
@@ -504,8 +728,11 @@ describe("Checkpoints", function() {
         });
 
         it("Should add new token holders after initial distribution", async () => {
+            const stoId = 0;
             const ltime = await latestTime();
             const expiry = ltime + duration.days(300);
+            const daiAddress = await I_DaiToken.getAddress();
+            const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
             const values: [string, bigint, boolean][] = [];
 
             // Add 20 new investors
@@ -526,6 +753,8 @@ describe("Checkpoints", function() {
 
             await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
+            await increaseTime(duration.days(2));
+
             for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
 
                 const proof = merkleTree.getProof(index);
@@ -550,11 +779,24 @@ describe("Checkpoints", function() {
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
-                await I_SecurityToken.connect(token_owner).issue(
-                    address,
-                    amount,
-                    "0x"
-                );
+                // Convert token amount to DAI equivalent
+                const amountDAI = await convert(stoId, 0, false, "TOKEN", "USD", amount);
+
+                // Mint and approve DAI for investor
+                await I_DaiToken.getTokens(amountDAI, address);
+                await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                
+                await expect(
+                    I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
+                        address,
+                        amountDAI,
+                        daiAddress,
+                        proof,
+                        expiry,
+                        isAccredited,
+                        investorClass
+                    )
+                ).to.not.be.reverted;
 
                 //validate balance
                 const balance = await I_SecurityToken.balanceOf(address);
@@ -758,12 +1000,15 @@ describe("Checkpoints", function() {
             console.log(`Dividend #${dividendIndex} created and verified`);
         });
 
-        it("Issuer should push full dividend to all token holders in batches and verify correct payout distribution", async () => {
+        it("Investors should be able to pull their own dividend", async () => {
 
             const dividendIndex = 0; // assuming this is the first dividend
             const totalInvestors  = Number(await stGetter.getInvestorCount());
-            const batchSize = 5;
-            const lastIndex = totalInvestors - 1;
+            const totalSupply = await I_SecurityToken.totalSupply();
+            const totalDividendAmount = ethers.parseEther("10000");
+
+            // Simulate time passing beyond maturity
+            await increaseTime(11);
 
             // Record balances before pushing
             const balancesBefore: Record<string, bigint> = {};
@@ -773,33 +1018,12 @@ describe("Checkpoints", function() {
             
             console.log(`Total investors: ${totalInvestors}`);
 
-            // Simulate time passing beyond maturity
-            await increaseTime(11);
-
-            // Push dividends in chunks
-            for (let start = 0; start <= lastIndex; start += batchSize) {
-                const remaining = totalInvestors - start;
-                const count = Math.min(batchSize, remaining);
-                const endIndex = start + count - 1;
-
-                // Avoid out-of-bounds by clamping to lastIndex
-                const safeEndIndex = Math.min(endIndex, lastIndex);
-
-                console.log(`Pushed dividend from ${start} to ${safeEndIndex}`);
-
-                const tx = await I_ERC20DividendCheckpoint.connect(token_owner).pushDividendPayment(
-                    dividendIndex,
-                    BigInt(start),
-                    BigInt(safeEndIndex)
-                );
-                await tx.wait();
-
-                console.log(`Pushed dividend from ${start} to  ${start + count - 1}`);
+            // Each investor pulls their dividend
+            for (const investor of allInvestors) {
+                await expect(
+                    I_ERC20DividendCheckpoint.connect(investor).pullDividendPayment(dividendIndex)
+                ).to.not.be.reverted;
             }
-            // Check balances after
-            const totalSupply = await I_SecurityToken.totalSupply();
-            const totalDividendAmount = ethers.parseEther("10000");
-
             for (const investor of allInvestors) {
                 const balance = await I_SecurityToken.balanceOf(investor.address);
                 const expectedShare = (balance * totalDividendAmount) / totalSupply;
@@ -812,13 +1036,13 @@ describe("Checkpoints", function() {
 
             // Verify the dividend was marked fully claimed
             const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
-            const tolerance = BigInt(20); // allow up to 20 wei rounding error
+            const tolerance = ethers.parseUnits("0.000000000000000020", 18); // 20 wei
             expect(
             (dividendData.claimedAmount >= totalDividendAmount - tolerance) &&
             (dividendData.claimedAmount <= totalDividendAmount)
             ).to.be.true;
 
-            console.log("Pushed dividend to all investors successfully");
+            console.log("All investors successfully pulled their dividend");
         });
 
         it("Should perform random transfers between investors", async () => {
@@ -897,7 +1121,7 @@ describe("Checkpoints", function() {
             console.log(`Second dividend #${dividendIndex} created and validated`);
         });
 
-        it("Issuer should push full second dividend to all token holders in batches and verify correct payout distribution", async () => {
+        it("Investors should pull their own second dividend and verify correct payout distribution", async () => {
             const dividendIndex = 1; // second dividend
             const totalDividendAmount = ethers.parseEther("20000"); 
             const totalInvestors  = Number(await stGetter.getInvestorCount());
@@ -914,27 +1138,13 @@ describe("Checkpoints", function() {
             console.log(`Total investors: ${totalInvestors}`);
 
             // Simulate time passing beyond maturity
-            await increaseTime(15); // assuming > maturity
+            await increaseTime(15); 
 
-            // Push dividends in chunks
-            for (let start = 0; start <= lastIndex; start += batchSize) {
-                const remaining = totalInvestors - start;
-                const count = Math.min(batchSize, remaining);
-                const endIndex = start + count - 1;
-
-                // Avoid out-of-bounds by clamping to lastIndex
-                const safeEndIndex = Math.min(endIndex, lastIndex);
-
-                console.log(`Pushed dividend from ${start} to ${safeEndIndex}`);
-
-                const tx = await I_ERC20DividendCheckpoint.connect(token_owner).pushDividendPayment(
-                    dividendIndex,
-                    BigInt(start),
-                    BigInt(safeEndIndex)
-                );
-                await tx.wait();
-
-                console.log(`Pushed dividend from ${start} to  ${start + count - 1}`);
+            // Each investor pulls their dividend
+            for (const investor of allInvestors) {
+                await expect(
+                    I_ERC20DividendCheckpoint.connect(investor).pullDividendPayment(dividendIndex)
+                ).to.not.be.reverted;
             }
 
             // Confirm correct payouts
@@ -959,7 +1169,7 @@ describe("Checkpoints", function() {
 
             expect(diff <= tolerance).to.be.true;
 
-            console.log("Pushed second dividend to all investors successfully");
+            console.log("All investors successfully pulled their second dividend");
         });
     });
 });
