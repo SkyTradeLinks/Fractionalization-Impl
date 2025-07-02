@@ -1004,12 +1004,20 @@ describe("Checkpoints", function() {
 
             const dividendIndex = 0; // assuming this is the first dividend
             const totalInvestors  = Number(await stGetter.getInvestorCount());
-            const totalSupply = await I_SecurityToken.totalSupply();
             const totalDividendAmount = ethers.parseEther("10000");
 
-            // Simulate time passing beyond maturity
-            await increaseTime(11);
-
+            // Get total supply at the time of dividend creation (checkpoint)
+            const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+            const checkpointId = Number(dividendData.checkpointId);
+            const maturity = Number(dividendData.maturity);
+            
+            const now = await latestTime();
+            if (now < maturity) {
+                // Simulate time passing beyond maturity
+                await increaseTime(maturity - now + 1); 
+            }
+            
+            const totalSupplyAtCheckpoint = await stGetter.totalSupplyAt(checkpointId);
             // Record balances before pushing
             const balancesBefore: Record<string, bigint> = {};
             for (const investor of allInvestors) {
@@ -1020,29 +1028,32 @@ describe("Checkpoints", function() {
 
             // Each investor pulls their dividend
             for (const investor of allInvestors) {
+                // Get investor's balance at the checkpoint
+                const balanceAtCheckpoint = await stGetter.balanceOfAt(investor.address, checkpointId);
+
+                // Calculate expected share
+                const expectedShare = (balanceAtCheckpoint * totalDividendAmount) / totalSupplyAtCheckpoint;
+
                 await expect(
                     I_ERC20DividendCheckpoint.connect(investor).pullDividendPayment(dividendIndex)
                 ).to.not.be.reverted;
-            }
-            for (const investor of allInvestors) {
-                const balance = await I_SecurityToken.balanceOf(investor.address);
-                const expectedShare = (balance * totalDividendAmount) / totalSupply;
-                const newBalance = await I_PolyToken.balanceOf(investor.address);
-                const claimed = newBalance - balancesBefore[investor.address];
 
+                // Check actual payout
+                const after = await I_PolyToken.balanceOf(investor.address);
+                const claimed = after - balancesBefore[investor.address];
 
                 expect(claimed).to.equal(expectedShare);
             }
 
             // Verify the dividend was marked fully claimed
-            const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+            const dividendDataFinal = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
             const tolerance = ethers.parseUnits("0.000000000000000020", 18); // 20 wei
             expect(
-            (dividendData.claimedAmount >= totalDividendAmount - tolerance) &&
-            (dividendData.claimedAmount <= totalDividendAmount)
+            (dividendDataFinal.claimedAmount >= totalDividendAmount - tolerance) &&
+            (dividendDataFinal.claimedAmount <= totalDividendAmount)
             ).to.be.true;
 
-            console.log("All investors successfully pulled their dividend");
+            console.log("All investors successfully pulled their dividend and received the correct dividend payout based on their checkpoint balance.");
         });
 
         it("Should perform random transfers between investors", async () => {
@@ -1125,8 +1136,19 @@ describe("Checkpoints", function() {
             const dividendIndex = 1; // second dividend
             const totalDividendAmount = ethers.parseEther("20000"); 
             const totalInvestors  = Number(await stGetter.getInvestorCount());
-            const batchSize = 5;
-            const lastIndex = totalInvestors - 1;
+
+            // Get total supply at the time of dividend creation (checkpoint)
+            const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+            const checkpointId = Number(dividendData.checkpointId);
+            const maturity = Number(dividendData.maturity);
+            
+            const now = await latestTime();
+            if (now < maturity) {
+                // Simulate time passing beyond maturity
+                await increaseTime(maturity - now + 1); 
+            }
+
+            const totalSupplyAtCheckpoint = await stGetter.totalSupplyAt(checkpointId);
 
             // Record balances before push
             const balancesBefore: Record<string, bigint> = {};
@@ -1137,39 +1159,37 @@ describe("Checkpoints", function() {
 
             console.log(`Total investors: ${totalInvestors}`);
 
-            // Simulate time passing beyond maturity
-            await increaseTime(15); 
-
             // Each investor pulls their dividend
             for (const investor of allInvestors) {
+                // Get investor's balance at the checkpoint
+                const balanceAtCheckpoint = await stGetter.balanceOfAt(investor.address, checkpointId);
+
+                // Calculate expected share
+                const expectedShare = (balanceAtCheckpoint * totalDividendAmount) / totalSupplyAtCheckpoint;
+
                 await expect(
                     I_ERC20DividendCheckpoint.connect(investor).pullDividendPayment(dividendIndex)
                 ).to.not.be.reverted;
-            }
 
-            // Confirm correct payouts
-            const totalSupply = await I_SecurityToken.totalSupply();
-
-            for (const investor of allInvestors) {
-                const balance = await I_SecurityToken.balanceOf(investor.address);
-                const expectedShare = (balance * totalDividendAmount) / totalSupply;
-
+                // Check actual payout
                 const after = await I_PolyToken.balanceOf(investor.address);
                 const claimed = after - balancesBefore[investor.address];
 
                 expect(claimed).to.equal(expectedShare);
             }
 
+            
+
             // Confirm total claim recorded
-            const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+            const dividendDataFinal = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
             const tolerance = ethers.parseUnits("0.000000000000000020", 18); // 20 wei
-            const diff = dividendData.claimedAmount > totalDividendAmount
-                ? dividendData.claimedAmount - totalDividendAmount
-                : totalDividendAmount - dividendData.claimedAmount;
+            const diff = dividendDataFinal.claimedAmount > totalDividendAmount
+                ? dividendDataFinal.claimedAmount - totalDividendAmount
+                : totalDividendAmount - dividendDataFinal.claimedAmount;
 
             expect(diff <= tolerance).to.be.true;
 
-            console.log("All investors successfully pulled their second dividend");
+            console.log("All investors successfully pulled their second dividend and received the correct dividend payout based on their checkpoint balance.");
         });
     });
 });
