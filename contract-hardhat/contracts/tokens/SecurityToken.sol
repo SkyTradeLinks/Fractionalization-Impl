@@ -16,7 +16,6 @@ import "../interfaces/token/IERC1644.sol";
 import "../interfaces/ITransferManager.sol";
 import "../libraries/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "hardhat/console.sol";
 
 
 /**
@@ -1061,9 +1060,9 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
 
     function updateFromRegistry() public {
         _onlyOwner();
-        moduleRegistry = IModuleRegistry(polymathRegistry.getAddress("ModuleRegistry"));
-        securityTokenRegistry = ISecurityTokenRegistry(polymathRegistry.getAddress("SecurityTokenRegistry"));
-        polyToken = IERC20(polymathRegistry.getAddress("PolyToken"));
+        moduleRegistry = IModuleRegistry(polymathRegistry.addressGetter("ModuleRegistry"));
+        securityTokenRegistry = ISecurityTokenRegistry(polymathRegistry.addressGetter("SecurityTokenRegistry"));
+        polyToken = IERC20(polymathRegistry.addressGetter("PolyToken"));
     }
 
     //Ownable Functions

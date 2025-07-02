@@ -33,36 +33,36 @@ export async function initializeContracts() {
     _contracts.tradingRestrictionManager = await TradingRestrictionManager.deploy();
     await _contracts.tradingRestrictionManager.waitForDeployment();
     
-    // // Deploy Mock Oracles
+    // Deploy Mock Oracles
     // Removed: console.log("Deploying Mock Oracles...");
-    // const MockOracle = await ethers.getContractFactory("MockOracle");
+    const MockOracle = await ethers.getContractFactory("MockOracle");
     
-    // // Deploy POLY Oracle
-    // _contracts.polyOracle = await MockOracle.deploy(
-    //     PolyToken,
-    //     ethers.encodeBytes32String("POLY"),
-    //     ethers.encodeBytes32String("USD"),
-    //     ethers.parseEther("0.5")
-    // );
-    // const POLYOracle = _contracts.polyOracle.address;
+    // Deploy POLY Oracle
+    _contracts.polyOracle = await MockOracle.deploy(
+         _contracts.devPolyToken.target,
+        ethers.encodeBytes32String("POLY"),
+        ethers.encodeBytes32String("USD"),
+        ethers.parseEther("0.5")
+    );
+    const POLYOracle = _contracts.polyOracle.target;
     
-    // // Deploy Stable Oracle
+    // Deploy Stable Oracle
     // Removed: console.log("Deploying StableOracle...");
-    // const StableOracle = await ethers.getContractFactory("StableOracle");
-    // _contracts.stableOracle = await StableOracle.deploy(
-    //     POLYOracle,
-    //     ethers.parseEther("0.1")
-    // );
-    // const StablePOLYOracle = _contracts.stableOracle.address;
+    const StableOracle = await ethers.getContractFactory("StableOracle");
+    _contracts.stableOracle = await StableOracle.deploy(
+        POLYOracle,
+        ethers.parseEther("0.1")
+    );
+    const StablePOLYOracle = _contracts.stableOracle.target;
     
-    // // Deploy ETH Oracle
-    // _contracts.ethOracle = await MockOracle.deploy(
-    //     nullAddress,
-    //     ethers.encodeBytes32String("ETH"),
-    //     ethers.encodeBytes32String("USD"),
-    //     ethers.parseEther("500")
-    // );
-    // const ETHOracle = _contracts.ethOracle.address;
+    // Deploy ETH Oracle
+    _contracts.ethOracle = await MockOracle.deploy(
+        nullAddress,
+        ethers.encodeBytes32String("ETH"),
+        ethers.encodeBytes32String("USD"),
+        ethers.parseEther("500")
+    );
+    const ETHOracle = _contracts.ethOracle.target;
     
     // Deploy PolymathRegistry
     // Removed: console.log("Deploying PolymathRegistry...");
@@ -235,6 +235,8 @@ export async function initializeContracts() {
     
     // Assign SecurityTokenRegistry address
     await _contracts.polymathRegistry.changeAddress("SecurityTokenRegistry", _contracts.securityTokenRegistryProxy.target);
+    const addr = await _contracts.polymathRegistry.addressGetter("SecurityTokenRegistry");
+    console.log("SecurityTokenRegistry address:", addr, "expected:", _contracts.securityTokenRegistryProxy.target);
     
     // Update module registry
     await _contracts.moduleRegistryInstance.updateFromRegistry();
@@ -269,9 +271,9 @@ export async function initializeContracts() {
     
     // Set Oracle addresses
     // Removed: console.log("Setting Oracle addresses...");
-    // await _contracts.polymathRegistry.changeAddress("PolyUsdOracle", POLYOracle);
-    // await _contracts.polymathRegistry.changeAddress("EthUsdOracle", ETHOracle);
-    // await _contracts.polymathRegistry.changeAddress("StablePolyUsdOracle", StablePOLYOracle);
+    await _contracts.polymathRegistry.changeAddress("PolyUsdOracle", POLYOracle);
+    await _contracts.polymathRegistry.changeAddress("EthUsdOracle", ETHOracle);
+    await _contracts.polymathRegistry.changeAddress("StablePolyUsdOracle", StablePOLYOracle);
     
     // Log deployment summary
     console.log(`

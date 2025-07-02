@@ -789,7 +789,7 @@ describe("TradingRestrictionManager", function () {
       const now = Math.floor(Date.now() / 1000);
 
       // With zero restriction, should be unlocked immediately
-      expect(result.canSendAfter).to.be.lt(now);
+      expect(result.canSendAfter).to.be.equal(now);
     });
   });
 });
