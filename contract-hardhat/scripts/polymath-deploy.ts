@@ -237,6 +237,9 @@ export async function initializeContracts() {
     await _contracts.polymathRegistry.changeAddress("SecurityTokenRegistry", _contracts.securityTokenRegistryProxy.target);
     const addr = await _contracts.polymathRegistry.addressGetter("SecurityTokenRegistry");
     console.log("SecurityTokenRegistry address:", addr, "expected:", _contracts.securityTokenRegistryProxy.target);
+
+    const FakeUSDT = await ethers.getContractFactory("FakeUSDT");
+    _contracts.fakeUSDTInstance = await FakeUSDT.deploy();
     
     // Update module registry
     await _contracts.moduleRegistryInstance.updateFromRegistry();
@@ -297,6 +300,8 @@ export async function initializeContracts() {
     ERC20DividendCheckpointLogic:         ${_contracts.erc20DividendCheckpointLogic.target}
     EtherDividendCheckpointFactory:       ${_contracts.etherDividendCheckpointFactory.target}
     ERC20DividendCheckpointFactory:       ${_contracts.erc20DividendCheckpointFactory.target}
+    TradingRestrictionManager:            ${_contracts.tradingRestrictionManager.target}
+    FakeUSDT:                             ${_contracts.fakeUSDTInstance.target}
     ---------------------------------------------------------------------------------
     `);
     
