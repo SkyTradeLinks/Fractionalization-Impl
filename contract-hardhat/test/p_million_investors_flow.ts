@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { Contract, ContractFactory, LogDescription } from "ethers";
+import { Contract, ContractFactory, JsonRpcProvider, LogDescription, Wallet } from "ethers";
 
 import { latestTime } from "./helpers/latestTime";
 import { duration } from "./helpers/utils";
@@ -10,6 +10,7 @@ import { initializeContracts } from "../scripts/polymath-deploy";
 import { randomInt } from "crypto";
 
 import { encodeModuleCall } from "./helpers/encodeCall";
+import { readInvestorsFromCSV, appendExpiryAndMerkleToCSV, appendCurrentBalancesToCSV, updateBalancesInCSV } from "./helpers/readAccountsBatch";
 
 import {
     DataStore,
@@ -99,7 +100,12 @@ const functionSignature = {
         ]
     };
 
-describe("Load test for massive investor flow", function() {
+    function sleep(ms: number) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+
+describe("Load test for mellion investor flow", function() {
     this.timeout(18000000);
 
     // Accounts Variable declaration
@@ -196,6 +202,8 @@ describe("Load test for massive investor flow", function() {
     const checkpointKey = 4;
     const STOKEY = 3;
     const STOSetupCost = 0;
+    const BATCH_SIZE = 10;
+    const provider = new JsonRpcProvider("http://localhost:8545");
 
     // Manager details
     const managerDetails = ethers.encodeBytes32String("Hello");
@@ -217,6 +225,7 @@ describe("Load test for massive investor flow", function() {
     let e18: bigint;
     let e16: bigint;
     let ltime;
+    let totalInvestors: number;
     enum InvestorClass {
         NonUS = 0,
         US = 1
@@ -230,7 +239,6 @@ describe("Load test for massive investor flow", function() {
         let USDTOKEN: bigint;
         if (_discount) USDTOKEN = (await I_USDTieredSTO_Array[_stoID].tiers(_tier))[1];
         else USDTOKEN = (await I_USDTieredSTO_Array[_stoID].tiers(_tier))[0];
-        console.log(`USDTOKEN: ${USDTOKEN}`);
         
         if (_currencyFrom == "TOKEN") {
             let tokenToUSD = (_amount * USDTOKEN) / e18;
@@ -573,79 +581,121 @@ describe("Load test for massive investor flow", function() {
             const expiry = ltime + duration.days(300);
             const daiAddress = await I_DaiToken.getAddress();
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
+            totalInvestors = 90;
+            
 
-            smallInvestors = accounts.slice(1, 901); // 900 small
-            largeInvestors = accounts.slice(901, 1001); // 100 large
-            allInvestors = [...smallInvestors, ...largeInvestors];
-            console.log(`Whitelisting ${allInvestors.length} investors...`);
+            for (let offset = 0; offset < totalInvestors; offset += BATCH_SIZE) {
+                console.log(`Processing batch ${offset} – ${offset + BATCH_SIZE}`);
 
-            for (const investor of allInvestors) {
-                const isAccredited = Math.random() < 0.5; // random accreditation
-                const investorClass = getRandomInvestorClass();
-                investorClassMap[investor.address.toLowerCase()] = investorClass;
+                const batchInvestors = await readInvestorsFromCSV( BATCH_SIZE, offset);
 
-                values.push([investor.address, BigInt(expiry), isAccredited]);
+                const values: [string, bigint, boolean][] = [];
+                const expiryList: string[] = [];
+                const merkleLeafList: string[] = [];
+
+                for (const investor of batchInvestors) {
+                    const row: [string, bigint, boolean] = [
+                        investor.address,
+                        BigInt(expiry),
+                        investor.isAccredited,
+                    ];
+                    values.push(row);
+                    expiryList.push(expiry.toString());
+                }
+
+
+                const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
+                const merkleRoot = merkleTree.root;
+
+                // Update the CSV with expiry1 + merkleLeaf1 for this batch
+                for (let i = 0; i < values.length; i++) {
+                    const leaf = merkleTree.leafHash(values[i]); 
+                    merkleLeafList.push(leaf);
+                }
+
+                appendExpiryAndMerkleToCSV("accounts.csv", expiryList, merkleLeafList, offset, 1);
+
+                // On-chain: Set Merkle root
+                await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
+
+                await increaseTime(duration.days(2));
+
+                for (let i = 0; i < values.length; i++) {
+
+                    const [address, expiry, isAccredited] = values[i];
+                    const proof = merkleTree.getProof(i);
+                    const investor = batchInvestors[i];
+                    const signer = new Wallet(investor.privateKey, provider);
+
+                    // if (!proof) console.error("Missing proof for", address, "at index", i);
+                    // if (investor.investorClass === undefined) console.error("Missing investorClass for", address);
+                    // if (!address) console.error("Missing address at index", i);
+                    // if (expiry === undefined) console.error("Missing expiry for", address);
+                    // if (isAccredited === undefined) console.error("Missing isAccredited for", address);
+
+                    // Whitelist investor
+                    await I_TradingRestrictionManager.connect(signer)
+                    .verifyInvestor(proof, address, expiry, isAccredited, investor.investorClass)
+                    .then(tx => tx.wait());
+
+
+                    const globalIndex = offset + i;
+                    const isSmallInvestor = globalIndex < 80;
+                    //Issue tokens based on group
+                    const rawAmount = isSmallInvestor
+                        ? randomInt(1000, 5000)         // small: 10–5,000
+                        : randomInt(10_000, 100_000);  // large holder
+
+                    const amount = ethers.parseEther(rawAmount.toString());
+
+                    // Convert token amount to DAI equivalent
+                    const amountDAI = await convert(stoId, 0, false, "TOKEN", "USD", amount);
+
+                    // Mint and approve DAI for investor
+                    const tx1 = await I_DaiToken.getTokens(amountDAI, address);
+                    await tx1.wait();
+                    await sleep(1000); // Wait for 1 second
+
+                    const tx2 = await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                    await tx2.wait();
+
+                    await sleep(1000); // Wait for 1 second
+
+                    
+                    await expect(
+                        I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
+                            address,
+                            amountDAI,
+                            daiAddress,
+                            proof,
+                            expiry,
+                            isAccredited,
+                            investor.investorClass
+                        )
+                    ).to.not.be.reverted;
+
+                    await sleep(1000); // Wait for 1 second
+                    
+
+                    //validate balance
+                    const balance = await I_SecurityToken.balanceOf(address);
+                    await sleep(1000); // Wait for 1 second
+
+                    expect(balance).to.equal(amount);
+
+                    issuedAmounts[address.toLowerCase()] = amount;
+
+                }
+                const balances: string[] = values.map(([address]) =>
+                    issuedAmounts[address.toLowerCase()].toString()
+                );
+
+                appendCurrentBalancesToCSV("accounts.csv", balances, offset);
+
+                console.log(`✅ Finished batch ${offset / BATCH_SIZE + 1}`);
             }
-
-
-            const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
-            const merkleRoot = merkleTree.root;
-
-            await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
-
-            await increaseTime(duration.days(2));
-
-            for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
-
-                const proof = merkleTree.getProof(index);
-                const signer = accounts.find(acc => acc.address === address)!;
-
-                const investorClass = investorClassMap[address.toLowerCase()];
-                // Whitelist investor
-                await expect(
-                    I_TradingRestrictionManager.connect(signer).verifyInvestor(
-                        proof,
-                        address,
-                        expiry,
-                        isAccredited,
-                        investorClass
-                    )
-                ).to.not.be.reverted;
-
-                //Issue tokens based on group
-                const rawAmount = smallInvestors.includes(signer)
-                    ? randomInt(10, 5000)         // small: 10–5,000
-                    : randomInt(10_000, 500_000);  // large holder
-
-                const amount = ethers.parseEther(rawAmount.toString());
-
-                // Convert token amount to DAI equivalent
-                const amountDAI = await convert(stoId, 0, false, "TOKEN", "USD", amount);
-
-                // Mint and approve DAI for investor
-                await I_DaiToken.getTokens(amountDAI, address);
-                await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
-                
-                await expect(
-                    I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
-                        address,
-                        amountDAI,
-                        daiAddress,
-                        proof,
-                        expiry,
-                        isAccredited,
-                        investorClass
-                    )
-                ).to.not.be.reverted;
-
-                //validate balance
-                const balance = await I_SecurityToken.balanceOf(address);
-                expect(balance).to.equal(amount);
-
-                issuedAmounts[address.toLowerCase()] = amount;
-            }
-
-            console.log(`Verified & issued tokens to ${allInvestors.length} investors using Merkle Tree.`);
+            console.log(`Verified & issued tokens to all investors using Merkle Tree.`);
+            
         });
 
         it("Should allow existing investors to buy more tokens using buyWithUSD", async () => {
@@ -654,29 +704,47 @@ describe("Load test for massive investor flow", function() {
             const expiry = ltime + duration.days(300);
             const daiAddress = await I_DaiToken.getAddress();
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
+            for (let offset = 0; offset < totalInvestors; offset += BATCH_SIZE) {
+                console.log(`Processing batch ${offset} – ${offset + BATCH_SIZE}`);
 
-            for (const investor of allInvestors) {
-                const isAccredited = Math.random() < 0.5; // random accreditation
-                const investorClass = getRandomInvestorClass();
-                investorClassMap[investor.address.toLowerCase()] = investorClass;
+                const batchInvestors = await readInvestorsFromCSV( BATCH_SIZE, offset);
 
-                values.push([investor.address, BigInt(expiry), isAccredited]);
-            }
+                const values: [string, bigint, boolean][] = [];
+                const expiryList: string[] = [];
+                const merkleLeafList: string[] = [];
+
+                for (const investor of batchInvestors) {
+                    const row: [string, bigint, boolean] = [
+                        investor.address,
+                        BigInt(expiry),
+                        investor.isAccredited,
+                    ];
+                    values.push(row);
+                    expiryList.push(expiry.toString());
+                }
 
 
-            const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
-            const merkleRoot = merkleTree.root;
+                const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
+                const merkleRoot = merkleTree.root;
 
-            await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
+                for (let i = 0; i < values.length; i++) {
+                    const leaf = merkleTree.leafHash(values[i]); 
+                    merkleLeafList.push(leaf);
+                }
 
-            await increaseTime(duration.days(2));
+                appendExpiryAndMerkleToCSV("accounts.csv", expiryList, merkleLeafList, offset, 2);
 
-            for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
+                await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
-                const proof = merkleTree.getProof(index);
-                const signer = accounts.find(acc => acc.address === address)!;
+                await increaseTime(duration.days(2));
 
-                const investorClass = investorClassMap[address.toLowerCase()];
+                for (let i = 0; i < values.length; i++) {
+
+                    const [address, expiry, isAccredited] = values[i];
+                    const proof = merkleTree.getProof(i);
+                    const investor = batchInvestors[i];
+                    // Manually reload nonce to avoid caching issues
+                    const signer = new Wallet(investor.privateKey, provider);
                 // Whitelist investor
                 await expect(
                     I_TradingRestrictionManager.connect(signer).verifyInvestor(
@@ -684,14 +752,16 @@ describe("Load test for massive investor flow", function() {
                         address,
                         expiry,
                         isAccredited,
-                        investorClass
+                        investor.investorClass
                     )
-                ).to.not.be.reverted;
+                    ).to.not.be.reverted;
 
-                //Issue tokens based on group
-                const rawAmount = smallInvestors.includes(signer)
-                    ? randomInt(10, 5000)         // small: 10–5,000
-                    : randomInt(10_000, 500_000);  // large holder
+                const globalIndex = offset + i;
+                const isSmallInvestor = globalIndex < 80;
+
+                const rawAmount = isSmallInvestor
+                        ? randomInt(1000, 2000)
+                        : randomInt(5000, 9000);
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
@@ -699,10 +769,17 @@ describe("Load test for massive investor flow", function() {
                 const amountDAI = await convert(stoId, 0, false, "TOKEN", "USD", amount);
 
                 // Mint and approve DAI for investor
-                await I_DaiToken.getTokens(amountDAI, address);
-                await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                const tx1 = await I_DaiToken.getTokens(amountDAI, address);
+                await tx1.wait();
+                await sleep(1000); // Wait for 1 second
+
+                const tx2 = await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                await tx2.wait();
+
+                await sleep(1000);
                 
-                const prevBalance = await I_SecurityToken.balanceOf(address);
+                // const prevBalance = await I_SecurityToken.balanceOf(address);
+                const prevBalance = investor.currentBalance
 
                 await expect(
                     I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
@@ -712,7 +789,7 @@ describe("Load test for massive investor flow", function() {
                         proof,
                         expiry,
                         isAccredited,
-                        investorClass
+                        investor.investorClass
                     )
                 ).to.not.be.reverted;
 
@@ -722,8 +799,14 @@ describe("Load test for massive investor flow", function() {
 
                 // Save issued amount (add to cumulative if needed)
                 issuedAmounts[address.toLowerCase()] = (issuedAmounts[address.toLowerCase()] || 0n) + amount;
-            }
+                }
+                const balances: string[] = values.map(([address]) =>
+                    issuedAmounts[address.toLowerCase()].toString()
+                );
 
+                appendCurrentBalancesToCSV("accounts.csv", balances, offset);
+                console.log(`Finished batch ${offset / BATCH_SIZE + 1}`);
+            }
             console.log("All existing investors bought more tokens successfully.");
         });
 
@@ -733,34 +816,47 @@ describe("Load test for massive investor flow", function() {
             const expiry = ltime + duration.days(300);
             const daiAddress = await I_DaiToken.getAddress();
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
-            const values: [string, bigint, boolean][] = [];
 
             // Add 20 new investors
-            const newInvestors = accounts.slice(1001, 1021);
-            allInvestors.push(...newInvestors)
+            const newInvestors = await readInvestorsFromCSV(10, 90);
+            totalInvestors += newInvestors.length
+
+            const values: [string, bigint, boolean][] = [];
+            const expiryList: string[] = [];
+            const merkleLeafList: string[] = [];
 
             for (const investor of newInvestors) {
-                const isAccredited = Math.random() < 0.5; // random accreditation
-                const investorClass = getRandomInvestorClass();
-                investorClassMap[investor.address.toLowerCase()] = investorClass;
-
-                values.push([investor.address, BigInt(expiry), isAccredited]);
+                const row: [string, bigint, boolean] = [
+                    investor.address,
+                    BigInt(expiry),
+                    investor.isAccredited,
+                ];
+                values.push(row);
+                expiryList.push(expiry.toString());
             }
 
 
             const merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
             const merkleRoot = merkleTree.root;
 
+            for (let i = 0; i < values.length; i++) {
+                const leaf = merkleTree.leafHash(values[i]); 
+                merkleLeafList.push(leaf);
+            }
+
+            appendExpiryAndMerkleToCSV("accounts.csv", expiryList, merkleLeafList, 90, 1);
+
             await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
             await increaseTime(duration.days(2));
 
-            for (const [index, [address, expiry, isAccredited]] of merkleTree.entries()) {
+            for (let i = 0; i < values.length; i++) {
 
-                const proof = merkleTree.getProof(index);
-                const signer = accounts.find(acc => acc.address === address)!;
+                const [address, expiry, isAccredited] = values[i];
+                const proof = merkleTree.getProof(i);
+                const investor = newInvestors[i];
+                const signer = new Wallet(investor.privateKey, provider);
 
-                const investorClass = investorClassMap[address.toLowerCase()];
                 // Whitelist investor
                 await expect(
                     I_TradingRestrictionManager.connect(signer).verifyInvestor(
@@ -768,14 +864,12 @@ describe("Load test for massive investor flow", function() {
                         address,
                         expiry,
                         isAccredited,
-                        investorClass
+                        investor.investorClass
                     )
                 ).to.not.be.reverted;
 
                 //Issue tokens based on group
-                const rawAmount = smallInvestors.includes(signer)
-                    ? randomInt(10, 5000)         // small: 10–5,000
-                    : randomInt(10_000, 500_000);  // large holder
+                const rawAmount = randomInt(1000, 100_000);
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
@@ -783,8 +877,14 @@ describe("Load test for massive investor flow", function() {
                 const amountDAI = await convert(stoId, 0, false, "TOKEN", "USD", amount);
 
                 // Mint and approve DAI for investor
-                await I_DaiToken.getTokens(amountDAI, address);
-                await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                const tx1 = await I_DaiToken.getTokens(amountDAI, address);
+                await tx1.wait();
+                await sleep(1000); // Wait for 1 second
+
+                const tx2 = await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+                await tx2.wait();
+
+                await sleep(1000);
                 
                 await expect(
                     I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
@@ -794,7 +894,7 @@ describe("Load test for massive investor flow", function() {
                         proof,
                         expiry,
                         isAccredited,
-                        investorClass
+                        investor.investorClass
                     )
                 ).to.not.be.reverted;
 
@@ -804,8 +904,13 @@ describe("Load test for massive investor flow", function() {
 
                 issuedAmounts[address.toLowerCase()] = amount;
             }
+            const balances: string[] = values.map(([address]) =>
+                issuedAmounts[address.toLowerCase()].toString()
+            );
 
-            console.log(`Added and funded ${newInvestors.length} new investors after initial distribution`);
+            appendCurrentBalancesToCSV("accounts.csv", balances, 90);
+
+            console.log(`Added and funded new investors after initial distribution`);
         });
 
         it("Fuzz test balance checkpoints for many investors", async () => {
@@ -813,140 +918,103 @@ describe("Load test for massive investor flow", function() {
 
             const checkpointBalances: Record<number, Record<string, bigint>> = {};
             const totalSupplies: Record<number, bigint> = {};
-            // const allInvestors = accounts.slice(1, 1021);
-            
-            for (let j = 0; j < 10; j++) {
-                const checkpointIndex = j + 1;
 
-                // Capture balances at this point
-                const balancesAtCheckpoint: Record<string, bigint> = {};
-                for (const investor of allInvestors) {
-                balancesAtCheckpoint[investor.address.toLowerCase()] = await I_SecurityToken.balanceOf(investor.address);
-                }
-                const totalSupply = await I_SecurityToken.totalSupply();
-                console.log("total supply: ", totalSupply)
-                
-                checkpointBalances[checkpointIndex] = balancesAtCheckpoint;
-                totalSupplies[checkpointIndex] = totalSupply;
+            for (let offset = 0; offset < totalInvestors; offset += BATCH_SIZE) {
+                console.log(`Processing batch ${offset} – ${offset + BATCH_SIZE}`);
 
-                console.log(`\nCheckpoint ${checkpointIndex} Created:`);
-                console.log(`TotalSupply: ${totalSupply.toString()}`);
-                
-                const investorLength = await stGetter.getInvestorCount();
-                const tx = await I_SecurityToken.connect(token_owner).createCheckpoint();
-                const receipt = await tx.wait();
-                
-                // Validate CheckpointCreated event
-                let checkpointEvent: LogDescription | null = null;
-                for (const log of receipt!.logs) {
-                    try {
-                        const parsed = I_SecurityToken.interface.parseLog(log);
-                        
-                        if (parsed && parsed.name === "CheckpointCreated") {
-                            checkpointEvent = parsed;
-                            break;
+                const batchInvestors = await readInvestorsFromCSV( BATCH_SIZE, offset);
+
+                for (let j = 0; j < 10; j++) {
+                    const checkpointIndex = j + 1;
+
+                    // Capture balances at this point
+                    const balancesAtCheckpoint: Record<string, bigint> = {};
+                    for (const investor of batchInvestors) {
+                        balancesAtCheckpoint[investor.address.toLowerCase()] = investor.currentBalance;
+                    }
+                    const totalSupply = await I_SecurityToken.totalSupply();
+                    console.log("total supply: ", totalSupply)
+                    
+                    checkpointBalances[checkpointIndex] = balancesAtCheckpoint;
+                    totalSupplies[checkpointIndex] = totalSupply;
+
+                    console.log(`\nCheckpoint ${checkpointIndex} Created:`);
+                    console.log(`TotalSupply: ${totalSupply.toString()}`);
+                    
+                    const investorLength = await stGetter.getInvestorCount();
+                    console.log("investor Length", investorLength)
+                    const tx = await I_SecurityToken.connect(token_owner).createCheckpoint();
+                    const receipt = await tx.wait();
+                    await sleep(1000);
+                    
+                    // Validate CheckpointCreated event
+                    let checkpointEvent: LogDescription | null = null;
+                    for (const log of receipt!.logs) {
+                        try {
+                            const parsed = I_SecurityToken.interface.parseLog(log);
+                            
+                            if (parsed && parsed.name === "CheckpointCreated") {
+                                checkpointEvent = parsed;
+                                break;
+                            }
+                        } catch (err: any) {
+                            console.log(`Failed to parse checkpoint event: ${err.message}`);
                         }
-                    } catch (err: any) {
-                        console.log(`Failed to parse checkpoint event: ${err.message}`);
                     }
-                }
-                
-                expect(checkpointEvent).to.not.be.null;
-                expect(checkpointEvent!.args[1]).to.equal(investorLength);
-                
-                const checkpointTimes: bigint[] = await stGetter.getCheckpointTimes();
-                expect(checkpointTimes.length).to.equal(j + 1);
-                console.log("Checkpoint Times: " + checkpointTimes.map(t => t.toString()));
-                
-                // Perform some random transfers
-                const transferCount = Math.floor(Math.random() * 10);
-                for (let i = 0; i < transferCount; i++) {
-                    const sender = allInvestors[Math.floor(Math.random() * allInvestors.length)];
-                    const receiver = allInvestors[Math.floor(Math.random() * allInvestors.length)];
+                    
+                    expect(checkpointEvent).to.not.be.null;
+                    expect(checkpointEvent!.args[1]).to.equal(investorLength);
+                    
+                    const checkpointTimes: bigint[] = await stGetter.getCheckpointTimes();
+                    expect(checkpointTimes.length).to.equal(j + 1);
+                    console.log("Checkpoint Times: " + checkpointTimes.map(t => t.toString()));
+                    
+                    // Perform some random transfers
+                    const transferCount = Math.floor(Math.random() * 10);
+                    for (let i = 0; i < transferCount; i++) {
+                        const sender = batchInvestors[Math.floor(Math.random() * batchInvestors.length)];
+                        const receiver = batchInvestors[Math.floor(Math.random() * batchInvestors.length)];
 
-                    if (sender.address === receiver.address) continue;
+                        if (sender.address === receiver.address) continue;
 
-                    // Check both are whitelisted and valid
-                    const isSenderWhitelisted = await I_TradingRestrictionManager.isExistingInvestor(sender.address);
-                    const isReceiverWhitelisted = await I_TradingRestrictionManager.isExistingInvestor(receiver.address);
-                    if (!isSenderWhitelisted || !isReceiverWhitelisted) {
-                        // Optionally log or count skipped transfers
-                        continue;
+                        const senderBalance = sender.currentBalance
+                        if (senderBalance === 0n) continue;
+
+                        const percentage = Math.floor(Math.random() * 10) + 1;
+                        const amount = (senderBalance * BigInt(percentage)) / 100n;
+
+                        console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
+                        console.log("1")
+                        await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
+                        console.log("2")
+                        await I_SecurityToken.connect(sender).transfer(receiver.address, amount);
+                        console.log("3")
+
+                        const newSenderBalance = await I_SecurityToken.balanceOf(sender.address);
+                        const newReceiverBalance = await I_SecurityToken.balanceOf(receiver.address);
+
+                        updateBalancesInCSV(
+                        sender.address,
+                        receiver.address,
+                        newSenderBalance,
+                        newReceiverBalance
+                        );
+
                     }
-
-                    const senderBalance = await I_SecurityToken.balanceOf(sender.address);
-                    if (senderBalance === 0n) continue;
-
-                    const percentage = Math.floor(Math.random() * 10) + 1;
-                    const amount = (senderBalance * BigInt(percentage)) / 100n;
-
-                    console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
-                    await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
-                    const kycDataSender = await I_TradingRestrictionManager.getInvestorKYCData(sender.address, I_SecurityToken.target);
-                    const kycDataReceiver = await I_TradingRestrictionManager.getInvestorKYCData(receiver.address, I_SecurityToken.target);
-                    console.log("Sender KYC:", sender.address, kycDataSender);
-                    console.log("Receiver KYC:", receiver.address, kycDataReceiver);
-                    await I_SecurityToken.connect(sender).transfer(receiver.address, amount);
-                }
                 
-                // Mint
-                if (Math.random() > 0.5) {
-                    const minter = allInvestors[Math.floor(Math.random() * allInvestors.length)];
-                    const min = 1_000_000_000_000_000n;                    // 0.001
-                    const maxDelta = 100_000_000_000_000n;                 // add up to 0.1
-                    const delta = BigInt(randomInt(0, Number(maxDelta)));
-                    const mintAmount = min + delta;
+                    // Final Check of all checkpoint data
+                    console.log("\nFinal Full Check...");
+                    for (const [checkpointIndex, balances] of Object.entries(checkpointBalances)) {
+                        const index = parseInt(checkpointIndex);
+                        const totalSupply = await stGetter.totalSupplyAt(index);
+                        expect(totalSupply).to.equal(totalSupplies[index]);
+                        console.log(`\nVerifying Checkpoint ${index}`);
+                        console.log(`Expected TotalSupply: ${totalSupplies[index]}, Found: ${totalSupply}`);
 
-                    console.log(`Minting ${mintAmount} to ${minter.address}`);
-                    await I_SecurityToken.connect(token_owner).issue(minter.address, mintAmount, "0x");
-                }
-
-                // burn
-                if (Math.random() > 0.5) {
-                    const burner = allInvestors[Math.floor(Math.random() * allInvestors.length)];
-                    const burnerBalance = await I_SecurityToken.balanceOf(burner.address);
-                    if (burnerBalance > 0n) {
-                        const min = 1_000_000_000_000_000n;
-                        const maxDelta = 100_000_000_000_000n;
-                        let burnAmount = min + BigInt(randomInt(0, Number(maxDelta)));
-
-                        if (burnAmount > burnerBalance / 2n) {
-                        burnAmount = burnerBalance / 2n;
-                        }
-
-                        console.log(`Burning ${burnAmount} from ${burner.address}`);
-                        await I_SecurityToken.connect(account_controller).controllerRedeem(burner.address, burnAmount, "0x", "0x");
+                        for (const [address, expectedBalance] of Object.entries(balances)) {
+                        const actualBalance = await stGetter.balanceOfAt(address, index);
+                        expect(actualBalance).to.equal(expectedBalance);
                     }
-                }
-                
-                // Interim Check
-                console.log("Checking Interim...");
-                for (let k = 1; k <= j + 1; k++) {
-                    const totalSupply = await stGetter.totalSupplyAt(k);
-                    expect(totalSupply).to.equal(totalSupplies[k]);
-                    console.log(`Checking TotalSupply: ${totalSupply.toString()} is ${totalSupplies[k].toString()} at checkpoint: ${k}`);
-
-                    const expectedBalances = checkpointBalances[k];
-                    for (const investor of allInvestors) {
-                        const expected = expectedBalances[investor.address.toLowerCase()] ?? 0n;
-                        const actual = await stGetter.balanceOfAt(investor.address, k);
-                        expect(actual).to.equal(expected);
-                    }
-                }
-            }
-            
-            // Final Check of all checkpoint data
-            console.log("\nFinal Full Check...");
-            for (const [checkpointIndex, balances] of Object.entries(checkpointBalances)) {
-                const index = parseInt(checkpointIndex);
-                const totalSupply = await stGetter.totalSupplyAt(index);
-                expect(totalSupply).to.equal(totalSupplies[index]);
-                console.log(`\nVerifying Checkpoint ${index}`);
-                console.log(`Expected TotalSupply: ${totalSupplies[index]}, Found: ${totalSupply}`);
-
-                for (const [address, expectedBalance] of Object.entries(balances)) {
-                const actualBalance = await stGetter.balanceOfAt(address, index);
-                expect(actualBalance).to.equal(expectedBalance);
                 }
             }
 
