@@ -792,6 +792,6 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
     function _getOracle(bytes32 _currency, bytes32 _denominatedCurrency) internal view returns(address oracleAddress) {
         oracleAddress = customOracles[_currency][_denominatedCurrency];
         if (oracleAddress == address(0))
-            oracleAddress =  IPolymathRegistry(securityToken.polymathRegistry()).getAddress(oracleKeys[_currency][_denominatedCurrency]);
+            oracleAddress =  IPolymathRegistry(securityToken.polymathRegistry()).addressGetter(oracleKeys[_currency][_denominatedCurrency]);
     }
 }

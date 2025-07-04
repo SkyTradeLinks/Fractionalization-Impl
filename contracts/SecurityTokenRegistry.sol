@@ -21,7 +21,6 @@ import "./libraries/Encoder.sol";
 import "./libraries/VersionUtils.sol";
 import "./libraries/DecimalMath.sol";
 import "./proxy/Proxy.sol";
-import "hardhat/console.sol";
 
 /**
  * @title Registry contract for issuers to register their tickers and security tokens
@@ -643,7 +642,6 @@ contract SecurityTokenRegistry is EternalStorage, Proxy {
         /*solium-disable-next-line security/no-block-members*/
         require(getUintValue(Encoder.getKey("registeredTickers_expiryDate", _ticker)) >= block.timestamp, "Ticker expired");
         (uint256 _usdFee, uint256 _polyFee) = _takeFee(STLAUNCHFEE);
-        console.log(_protocolVersion);
         address newSecurityTokenAddress = _deployToken(_name, _ticker, _tokenDetails, issuer, _divisible, _treasuryWallet, _protocolVersion);
         if (_protocolVersion == VersionUtils.pack(2, 0, 0)) {
             // For backwards compatibilty. Should be removed with an update when we disable st 2.0 generation.
