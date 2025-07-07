@@ -358,7 +358,6 @@ contract SecurityToken is ERC20, ReentrancyGuard, SecurityTokenStorage, IERC1594
     * @param _dataStore Address of the token data store
     */
     function changeDataStore(address _dataStore) external {
-        console.log("owner:", owner_, msg.sender);
         _onlyOwner();
         _zeroAddressCheck(_dataStore);
         dataStore = IDataStore(_dataStore);
