@@ -7,17 +7,17 @@ function getRandomInvestorClass(): number {
 }
 
 const OUTPUT_FILE = "accounts.csv";
-const TOTAL = 100;
-const BATCH_SIZE = 50;
-const FUND_AMOUNT = "1.0"; // ETH per account
+const TOTAL = 1000;
+const BATCH_SIZE = 100;
+const FUND_AMOUNT = "0.1"; // ETH per account
 
 async function main() {
-  console.log("🚀 Process started");
+  console.log("Process started");
 
   const [faucet] = await hre.ethers.getSigners();
 
   if (!faucet || !faucet.sendTransaction) {
-    throw new Error("❌ Faucet signer not available");
+    throw new Error("Faucet signer not available");
   }
 
   // Write CSV header with currentBalance
@@ -53,17 +53,17 @@ async function main() {
 
     fs.appendFileSync(OUTPUT_FILE, lines.join("\n") + "\n");
     console.log(
-      `✅ Batch ${batchStart / BATCH_SIZE + 1} complete (${Math.min(
+      ` Batch ${batchStart / BATCH_SIZE + 1} complete (${Math.min(
         batchStart + BATCH_SIZE,
         TOTAL
       )}/${TOTAL})`
     );
   }
 
-  console.log(`🎉 Done! Generated ${TOTAL} funded accounts in ${OUTPUT_FILE}`);
+  console.log(`Done! Generated ${TOTAL} funded accounts in ${OUTPUT_FILE}`);
 }
 
 main().catch((err) => {
-  console.error("❌ Error:", err);
+  console.error(" Error:", err);
   process.exit(1);
 });

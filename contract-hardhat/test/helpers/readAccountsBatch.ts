@@ -32,7 +32,7 @@ export async function readInvestorsFromCSV(
 }
 
 /**
- * Adds expiry1 and merkleLeaf1 columns to accounts.csv using precomputed values.
+ * Adds expiryn and merkleLeafn columns to accounts.csv using precomputed values.
  */
 export function appendExpiryAndMerkleToCSV(
   inputFile: string = "accounts.csv",
@@ -48,7 +48,7 @@ export function appendExpiryAndMerkleToCSV(
   const lines = fs.readFileSync(inputFile, "utf-8").split("\n");
   const header = lines[0].trim();
   
-  if (!header.includes("expiry1")) {
+  if (!header.includes(`expiry${num}`)) {
     lines[0] = `${header},expiry${num},merkleLeaf${num}`;
   }
 
@@ -60,7 +60,7 @@ export function appendExpiryAndMerkleToCSV(
   }
 
   fs.writeFileSync(inputFile, lines.join("\n"));
-  console.log(`✅ Updated ${inputFile} with expiry${num} and merkleLeaf${num}`);
+  console.log(`Updated ${inputFile} with expiry${num} and merkleLeaf${num}`);
 }
 
 /**
@@ -94,7 +94,7 @@ export async function appendCurrentBalanceToCSV(
   }
 
   fs.writeFileSync(inputFile, lines.join("\n"));
-  console.log(`✅ Updated ${inputFile} with currentBalance for batch ${offset}–${offset + limit - 1}`);
+  console.log(`Updated ${inputFile} with currentBalance for batch ${offset}–${offset + limit - 1}`);
 }
 
 /**
@@ -111,7 +111,7 @@ export function appendCurrentBalancesToCSV(
   const balanceColumnIndex = headers.indexOf("currentBalance");
 
   if (balanceColumnIndex === -1) {
-    throw new Error("❌ 'currentBalance' column not found in CSV header");
+    throw new Error("'currentBalance' column not found in CSV header");
   }
 
   for (let i = 0; i < balances.length; i++) {
@@ -133,7 +133,7 @@ export function appendCurrentBalancesToCSV(
   }
 
   fs.writeFileSync(inputFile, lines.join("\n"));
-  console.log(`✅ Updated 'currentBalance' for ${balances.length} investors in ${inputFile} (offset: ${offset})`);
+  console.log(`Updated 'currentBalance' for ${balances.length} investors in ${inputFile} (offset: ${offset})`);
 }
 
 /**
@@ -152,7 +152,7 @@ export function updateBalancesInCSV(
   const balanceColIndex = header.split(",").indexOf("currentBalance");
 
   if (balanceColIndex === -1) {
-    console.error("❌ 'currentBalance' column not found in CSV.");
+    console.error("'currentBalance' column not found in CSV.");
     return;
   }
 
@@ -174,5 +174,5 @@ export function updateBalancesInCSV(
   }
 
   fs.writeFileSync(csvPath, lines.join("\n"));
-  console.log(`✅ Updated 'currentBalance' for sender and receiver in ${csvPath}`);
+  console.log(`Updated 'currentBalance' for sender and receiver in ${csvPath}`);
 }
