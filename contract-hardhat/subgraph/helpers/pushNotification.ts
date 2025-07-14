@@ -1,6 +1,6 @@
 import { BigInt, log } from "@graphprotocol/graph-ts";
 import { SUBGRAPH_ID } from "../constant";
-import { EpnsNotificationCounter, EpnsPushNotification } from "../../generated/schema";
+import { EpnsNotificationCounter, EpnsPushNotification } from "../generated/schema";
 
 export function sendPushNotification(
   recipient: string,

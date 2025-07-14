@@ -5,8 +5,8 @@ import {
   ERC20DividendCheckpointFactory as ERC20DividendCheckpointFactorySchema,
   AccountUser as AccountUserSchema,
   UserDividend,
-} from "../../generated/schema"
-import { ERC20DividendCheckpoint, ERC20DividendClaimed as ERC20DividendClaimedEvent, ERC20DividendDeposited, ERC20DividendDeposited as ERC20DividendDepositedEvent } from "../../generated/templates/ERC20DividendCheckpoint/ERC20DividendCheckpoint";
+} from "../generated/schema"
+import { ERC20DividendCheckpoint, ERC20DividendClaimed as ERC20DividendClaimedEvent, ERC20DividendDeposited, ERC20DividendDeposited as ERC20DividendDepositedEvent } from "../generated/templates/ERC20DividendCheckpoint/ERC20DividendCheckpoint";
 import { CHANNEL_ADDRESS } from "../constant";
 import { sendPushNotification } from "../helpers/pushNotification";
 import { Address, BigInt } from "@graphprotocol/graph-ts";

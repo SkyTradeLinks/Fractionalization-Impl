@@ -14,7 +14,7 @@ contract FakeUSDT {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
     constructor() {
-        totalSupply = 10000 * 10 ** uint256(decimals);
+        totalSupply = 10000000 * 10 ** uint256(decimals);
         balanceOf[msg.sender] = totalSupply;
         emit Transfer(address(0), msg.sender, totalSupply);
     }

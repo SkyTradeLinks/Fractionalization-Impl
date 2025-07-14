@@ -1,20 +1,20 @@
-import { GenerateModuleFromFactory as GenerateModuleFromUSDTieredSTOFactoryEvent } from "../../generated/USDTieredSTOFactory/USDTieredSTOFactory"
+import { GenerateModuleFromFactory as GenerateModuleFromUSDTieredSTOFactoryEvent } from "../generated/USDTieredSTOFactory/USDTieredSTOFactory"
 import { 
   Aggregate as AggregateSchema,
   GeneralTransferManagerFactory as GeneralTransferManagerFactorySchema,
   USDTieredSTOFactory as USDTieredSTOFactorySchema, 
   ERC20DividendCheckpointFactory as ERC20DividendCheckpointFactorySchema,
   SecurityTokenFactory as SecurityTokenFactorySchema,
-} from "../../generated/schema";
-import { GenerateModuleFromFactory as GenerateModuleFromERC20DividendCheckpointFactoryEvent } from '../../generated/ERC20DividendCheckpointFactory/ERC20DividendCheckpointFactory';
+} from "../generated/schema";
+import { GenerateModuleFromFactory as GenerateModuleFromERC20DividendCheckpointFactoryEvent } from '../generated/ERC20DividendCheckpointFactory/ERC20DividendCheckpointFactory';
 import { 
   ERC20DividendCheckpoint as ERC20DividendCheckpointTemplate, 
   USDTieredSTO as USDTieredSTOTemplate 
-} from "../../generated/templates"
-import { SecurityToken as SecurityTokenTemplate } from '../../generated/templates';
+} from "../generated/templates"
+import { SecurityToken as SecurityTokenTemplate } from '../generated/templates';
 import {
   GenerateModuleFromFactory as GenerateModuleFromFactoryEvent
-} from '../../generated/GeneralTransferManagerFactory/GeneralTransferManagerFactory';
+} from '../generated/GeneralTransferManagerFactory/GeneralTransferManagerFactory';
 import { BigInt } from "@graphprotocol/graph-ts";
 
 export function handleGenerateModuleFromGeneralTransferManagerFactory(

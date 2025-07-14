@@ -20,6 +20,17 @@ const config: HardhatUserConfig = {
       },
     ],
   },
+  networks: {
+    base: {
+      url: `https://base-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      chainId: 84532,
+      accounts: [process.env.PRIVATE_KEY],
+    },
+    monad: {
+      url: `https://monad-testnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      chainId: 10143,
+      accounts: [process.env.PRIVATE_KEY],
+    }
+  },
 };
-
 export default config;
