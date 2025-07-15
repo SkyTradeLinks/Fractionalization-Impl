@@ -1,5 +1,5 @@
-import { STOState, TokenPurchase as TokenPurchaseSchema } from "../generated/schema"
-import { TokenPurchase } from "../generated/templates/USDTieredSTO/USDTieredSTO"
+import { STOState, TokenPurchase as TokenPurchaseSchema } from "../../generated/schema"
+import { TokenPurchase } from "../../generated/templates/USDTieredSTO/USDTieredSTO"
 
 
 export function handleTokenPurchase(event: TokenPurchase): void {

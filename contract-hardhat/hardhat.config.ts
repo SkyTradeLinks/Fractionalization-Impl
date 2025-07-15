@@ -1,5 +1,15 @@
 import { HardhatUserConfig } from "hardhat/config";
+import dotenv from "dotenv";
 import "@nomicfoundation/hardhat-toolbox";
+
+
+const dotenvResult = dotenv.config();
+if (dotenvResult.error) {
+  throw dotenvResult.error;
+}
+
+const { PROVIDER_URL, OWNER_PRIVATE_KEY, ETHERSCAN_API_KEY } = process.env;
+const accounts = [...(OWNER_PRIVATE_KEY ? [OWNER_PRIVATE_KEY] : [])];
 
 const config: HardhatUserConfig = {
   mocha: {
@@ -21,16 +31,29 @@ const config: HardhatUserConfig = {
     ],
   },
   networks: {
-    base: {
-      url: `https://base-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
-      chainId: 84532,
-      accounts: [process.env.PRIVATE_KEY],
+    local: {
+      url: PROVIDER_URL,
+      chainId: 31337,
     },
-    monad: {
-      url: `https://monad-testnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+    hardhat: {
+      chainId: 1337,
+    },
+    localhost: {
+      chainId: 1337,
+      url: "http://localhost:8545",
+    },
+    baseSepolia: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 84532,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
+    monadTestnet: {
+      url: PROVIDER_URL,
+      accounts,
       chainId: 10143,
-      accounts: [process.env.PRIVATE_KEY],
-    }
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
   },
 };
 export default config;

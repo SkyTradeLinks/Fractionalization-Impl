@@ -1,4 +1,4 @@
-import { NewSecurityToken as NewSecurityTokenEvent } from '../generated/SecurityTokenRegistry/SecurityTokenRegistry';
+import { NewSecurityToken as NewSecurityTokenEvent } from '../../generated/SecurityTokenRegistry/SecurityTokenRegistry';
 import {
   Account as AccountSchema,
   Aggregate as AggregateSchema,
@@ -7,11 +7,11 @@ import {
   CheckpointBalance as CheckpointBalanceSchema,
   TokenBalance as TokenBalanceSchema,
   AccountUser as AccountUserSchema,
-} from "../generated/schema";
+} from "../../generated/schema";
 import { 
   CheckpointCreated as CheckpointCreatedEvent, 
   Transfer as TransferEvent 
-} from '../generated/templates/SecurityToken/SecurityToken';
+} from '../../generated/templates/SecurityToken/SecurityToken';
 import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 
 

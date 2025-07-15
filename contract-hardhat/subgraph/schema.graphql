@@ -1,3 +1,10 @@
+type MerkleRoot @entity(immutable: false) {
+  id: ID!
+  root: Bytes!
+  creator: Bytes!
+  timestamp: BigInt!
+}
+
 type USDTieredSTOFactory @entity(immutable: false) {
   id: ID!
   module: Bytes!
