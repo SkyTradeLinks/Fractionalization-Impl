@@ -7,9 +7,9 @@ function getRandomInvestorClass(): number {
 }
 
 const OUTPUT_FILE = "accounts.csv";
-const TOTAL = 1000;
-const BATCH_SIZE = 100;
-const FUND_AMOUNT = "0.1"; // ETH per account
+const TOTAL = 10000;
+const BATCH_SIZE = 500;
+const FUND_AMOUNT = "0.01"; // ETH per account
 
 async function main() {
   console.log("Process started");

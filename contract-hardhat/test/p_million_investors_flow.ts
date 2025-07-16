@@ -1,3 +1,9 @@
+// npx hardhat node
+// Open second terminal and run the below commands:
+// cd contract-hardhat
+// npx hardhat run scripts/generateAccounts.ts --network localhost
+// npx hardhat test test\p_million_investors_flow.ts --network localhost
+
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -202,7 +208,7 @@ describe("Load test for million investor flow", function() {
     const checkpointKey = 4;
     const STOKEY = 3;
     const STOSetupCost = 0;
-    const BATCH_SIZE = 100;
+    const BATCH_SIZE = 500;
     const provider = new JsonRpcProvider("http://localhost:8545");
 
     // Manager details
@@ -573,7 +579,7 @@ describe("Load test for million investor flow", function() {
             const expiry = ltime + duration.days(300);
             const daiAddress = await I_DaiToken.getAddress();
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
-            totalInvestors = 900;
+            totalInvestors = 9000;
             
 
             for (let offset = 0; offset < totalInvestors; offset += BATCH_SIZE) {
@@ -742,9 +748,7 @@ describe("Load test for million investor flow", function() {
                 const globalIndex = offset + i;
                 const isSmallInvestor = globalIndex < 800;
 
-                const rawAmount = isSmallInvestor
-                        ? randomInt(1000, 2000)
-                        : randomInt(5000, 9000);
+                const rawAmount = randomInt(1000, 9000)
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
@@ -778,14 +782,14 @@ describe("Load test for million investor flow", function() {
 
                 //validate balance
                 const newBalance = await I_SecurityToken.balanceOf(address);
-                // expect(newBalance).to.equal(prevBalance + amount);
-                const actualDelta = newBalance - prevBalance;
-                const tolerance = ethers.parseUnits("0.001", 18);
-                const diff = actualDelta > amount ? actualDelta - amount : amount - actualDelta;
-
-                expect(diff <= tolerance, `Expected ~${amount}, got ${actualDelta}, diff ${diff} > ${tolerance}`).to.be.true;
-
-
+                expect(newBalance).to.equal(prevBalance + amount);
+                
+                
+                // const actualDelta = newBalance - prevBalance;
+                // const tolerance = ethers.parseUnits("0.001", 18);
+                // const diff = actualDelta > amount ? actualDelta - amount : amount - actualDelta;
+                // expect(diff <= tolerance, `Expected ~${amount}, got ${actualDelta}, diff ${diff} > ${tolerance}`).to.be.true;
+                
                 // Save issued amount (add to cumulative if needed)
                 issuedAmounts[address.toLowerCase()] = (issuedAmounts[address.toLowerCase()] || 0n) + amount;
                 }
@@ -804,9 +808,10 @@ describe("Load test for million investor flow", function() {
             const expiry = ltime + duration.days(300);
             const daiAddress = await I_DaiToken.getAddress();
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
+            const offset = totalInvestors
 
             // Add 20 new investors
-            const newInvestors = await readInvestorsFromCSV(100, 900);
+            const newInvestors = await readInvestorsFromCSV(1000, offset);
             totalInvestors += newInvestors.length
 
             const values: [string, bigint, boolean][] = [];
@@ -832,7 +837,7 @@ describe("Load test for million investor flow", function() {
                 merkleLeafList.push(leaf);
             }
 
-            appendExpiryAndMerkleToCSV("accounts.csv", expiryList, merkleLeafList, 90, 1);
+            appendExpiryAndMerkleToCSV("accounts.csv", expiryList, merkleLeafList, offset, 1);
 
             await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
 
@@ -857,7 +862,7 @@ describe("Load test for million investor flow", function() {
                 ).to.not.be.reverted;
 
                 //Issue tokens based on group
-                const rawAmount = randomInt(1000, 100_000);
+                const rawAmount = randomInt(1000, 50_000);
 
                 const amount = ethers.parseEther(rawAmount.toString());
 
@@ -896,7 +901,7 @@ describe("Load test for million investor flow", function() {
                 issuedAmounts[address.toLowerCase()].toString()
             );
 
-            appendCurrentBalancesToCSV("accounts.csv", balances, 90);
+            appendCurrentBalancesToCSV("accounts.csv", balances, 9000);
 
             console.log(`Added and funded new investors after initial distribution`);
         });
@@ -1232,7 +1237,3 @@ describe("Load test for million investor flow", function() {
     });
 });
 
-// npx hardhat node
-// cd contract-hardhat
-// npx hardhat run scripts/generateAccounts.ts --network localhost
-// npx hardhat test test\p_million_investors_flow.ts --network localhost
