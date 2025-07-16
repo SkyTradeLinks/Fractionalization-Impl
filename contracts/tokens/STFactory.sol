@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "./SecurityTokenProxy.sol";
 import "../proxy/OwnedUpgradeabilityProxy.sol";
@@ -6,7 +7,7 @@ import "../interfaces/ISTFactory.sol";
 import "../interfaces/ISecurityToken.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../interfaces/IOwnable.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IModuleRegistry.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../datastore/DataStoreFactory.sol";
@@ -36,12 +37,6 @@ contract STFactory is ISTFactory, Ownable {
     uint256 public latestUpgrade;
 
     event LogicContractSet(string _version, uint256 _upgrade, address _logicContract, bytes _initializationData, bytes _upgradeData);
-    event TokenUpgraded(
-        address indexed _securityToken,
-        uint256 indexed _version
-    );
-    event DefaultTransferManagerUpdated(address indexed _oldTransferManagerFactory, address indexed _newTransferManagerFactory);
-    event DefaultDataStoreUpdated(address indexed _oldDataStoreFactory, address indexed _newDataStoreFactory);
 
     constructor(
         address _polymathRegistry,
@@ -51,7 +46,7 @@ contract STFactory is ISTFactory, Ownable {
         address _logicContract,
         bytes memory _initializationData
     )
-        public
+    Ownable(msg.sender)
     {
         require(_logicContract != address(0), "Invalid Address");
         require(_transferManagerFactory != address(0), "Invalid Address");
@@ -93,7 +88,7 @@ contract STFactory is ISTFactory, Ownable {
             _divisible
         );
         //NB When dataStore is generated, the security token address is automatically set via the constructor in DataStoreProxy.
-        if (address(dataStoreFactory) != address(0)) {
+        if (address(dataStoreFactory) != address(0)) { // failing here - due to 'Not Owner'
             ISecurityToken(securityToken).changeDataStore(dataStoreFactory.generateDataStore(securityToken));
         }
         ISecurityToken(securityToken).changeTreasuryWallet(_treasuryWallet);
@@ -105,10 +100,10 @@ contract STFactory is ISTFactory, Ownable {
     }
 
     function _deploy(
-        string memory _name,
-        string memory _symbol,
+        string calldata _name,
+        string calldata _symbol,
         uint8 _decimals,
-        string memory _tokenDetails,
+        string calldata _tokenDetails,
         bool _divisible
     ) internal returns(address) {
         // Creates proxy contract and sets some initial storage
@@ -184,7 +179,7 @@ contract STFactory is ISTFactory, Ownable {
         require(tokenUpgrade[msg.sender] != 0, "Invalid token");
         uint256 newVersion = tokenUpgrade[msg.sender] + 1;
         require(newVersion <= latestUpgrade, "Incorrect version");
-        OwnedUpgradeabilityProxy(address(uint160(msg.sender))).upgradeToAndCall(logicContracts[newVersion].version, logicContracts[newVersion].logicContract, logicContracts[newVersion].upgradeData);
+        OwnedUpgradeabilityProxy(payable(address(uint160(msg.sender)))).upgradeToAndCall(logicContracts[newVersion].version, logicContracts[newVersion].logicContract, logicContracts[newVersion].upgradeData);
         tokenUpgrade[msg.sender] = newVersion;
         // Check that all modules remain valid
         IModuleRegistry moduleRegistry = IModuleRegistry(polymathRegistry.getAddress("ModuleRegistry"));

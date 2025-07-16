@@ -1,4 +1,5 @@
-pragma solidity 0.5.8;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
 
 import "../proxy/OwnedUpgradeabilityProxy.sol";
 import "./OZStorage.sol";
@@ -26,17 +27,16 @@ contract SecurityTokenProxy is OZStorage, SecurityTokenStorage, OwnedUpgradeabil
         string memory _tokenDetails,
         address _polymathRegistry
     )
-        public
     {
         //Set storage variables - NB implementation not yet set
         require(_polymathRegistry != address(0), "Invalid Address");
-        name = _name;
-        symbol = _symbol;
-        decimals = _decimals;
+        name_ = _name;
+        symbol_ = _symbol;
+        decimals_ = _decimals;
         polymathRegistry = IPolymathRegistry(_polymathRegistry);
         tokenDetails = _tokenDetails;
         granularity = _granularity;
-        _owner = msg.sender;
+        owner_ = msg.sender;
     }
 
 }
