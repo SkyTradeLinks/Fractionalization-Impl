@@ -176,3 +176,60 @@ export function updateBalancesInCSV(
   fs.writeFileSync(csvPath, lines.join("\n"));
   console.log(`Updated 'currentBalance' for sender and receiver in ${csvPath}`);
 }
+
+export function appendBatchDataToCSV(
+  inputFile: string = "accounts.csv",
+  expiryList: Array<string | number>,
+  merkleLeafList: string[],
+  balanceList: Array<string | number>,
+  offset: number = 0,
+  num: number = 1
+) {
+  if (
+    expiryList.length !== merkleLeafList.length ||
+    expiryList.length !== balanceList.length
+  ) {
+    throw new Error(
+      "expiryList, merkleLeafList and balanceList must all have the same length"
+    );
+  }
+
+  // 1) Read & split
+  const lines = fs.readFileSync(inputFile, "utf-8").split("\n");
+  let header = lines[0].trim();
+
+  // 2) Ensure all three headers exist
+  const expiryHeader = `expiry${num}`;
+  const merkleHeader = `merkleLeaf${num}`;
+  const balanceHeader = `currentBalance`;
+
+  const toAdd: string[] = [];
+  if (!header.includes(expiryHeader))   toAdd.push(expiryHeader);
+  if (!header.includes(merkleHeader))   toAdd.push(merkleHeader);
+  if (!header.includes(balanceHeader))  toAdd.push(balanceHeader);
+
+  if (toAdd.length) {
+    header += "," + toAdd.join(",");
+    lines[0] = header;
+  }
+
+  // 3) Append per-line
+  for (let i = 0; i < expiryList.length; i++) {
+    const lineIdx = offset + 1 + i; // +1 to skip header
+    if (!lines[lineIdx]) continue;
+
+    const e = expiryList[i];
+    const m = merkleLeafList[i];
+    const b = balanceList[i];
+
+    lines[lineIdx] = `${lines[lineIdx]},${e},${m},${b}`;
+  }
+
+  // 4) Write back
+  fs.writeFileSync(inputFile, lines.join("\n"));
+  console.log(
+    `Updated ${inputFile} at rows ${offset}–${offset +
+      expiryList.length -
+      1} with ${expiryHeader}, ${merkleHeader} and ${balanceHeader}`
+  );
+}
