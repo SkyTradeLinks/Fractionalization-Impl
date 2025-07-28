@@ -6,6 +6,9 @@ export type InvestorWallet = Wallet & {
   isAccredited: boolean;
   investorClass: number;
   currentBalance: bigint;
+  expiry?: string;
+  merkleLeaf?: string;
+  proof?: string[];
 };
 
 /**
@@ -18,15 +21,41 @@ export async function readInvestorsFromCSV(
   const provider = new JsonRpcProvider("http://localhost:8545");
   const lines = fs.readFileSync("accounts.csv", "utf-8")
                   .split("\n")
-                  .slice(1 + offset, 1 + offset + limit)
                   .filter(Boolean);
 
-  return lines.map((line) => {
-    const [_, address, privateKey, isAccredited, investorClass, currentBalance] = line.split(",");
-    const wallet = new Wallet(privateKey.trim(), provider) as InvestorWallet;
-    wallet.isAccredited = isAccredited === "true";
-    wallet.investorClass = parseInt(investorClass);
-    wallet.currentBalance = BigInt(currentBalance || "0");
+  const header = lines[0].split(",").map(h => h.trim());
+  const dataLines = lines.slice(1 + offset, 1 + offset + limit);
+
+  const getFieldIndex = (field: string) => header.indexOf(field);
+
+  const expiryIndex = getFieldIndex("expiry1");
+  const merkleLeafIndex = getFieldIndex("merkleLeaf1");
+  const proofIndex = getFieldIndex("proof1");
+
+  return dataLines.map((line) => {
+    const cols = line.split(",");
+
+    const address = cols[1]?.trim();
+    const privateKey = cols[2]?.trim();
+    const isAccredited = cols[3]?.trim() === "true";
+    const investorClass = parseInt(cols[4]);
+    const currentBalance = BigInt(cols[5] || "0");
+
+    const wallet = new Wallet(privateKey, provider) as InvestorWallet;
+    wallet.isAccredited = isAccredited;
+    wallet.investorClass = investorClass;
+    wallet.currentBalance = currentBalance;
+
+    if (expiryIndex !== -1) wallet.expiry = cols[expiryIndex]?.trim();
+    if (merkleLeafIndex !== -1) wallet.merkleLeaf = cols[merkleLeafIndex]?.trim();
+    if (proofIndex !== -1) {
+      try {
+        wallet.proof = JSON.parse(cols[proofIndex]);
+      } catch {
+        wallet.proof = [];
+      }
+    }
+
     return wallet;
   });
 }
@@ -34,14 +63,15 @@ export async function readInvestorsFromCSV(
 /**
  * Adds expiryn and merkleLeafn columns to accounts.csv using precomputed values.
  */
-export function appendExpiryAndMerkleToCSV(
+export function appendExpiryAndMerkleToCSVWithProof(
   inputFile: string = "accounts.csv",
-  expiryList: (string | number)[],
+  expiry: (string | number),
   merkleLeafList: string[],
+  proofList: string[],
   offset: number = 0, 
   num: number = 1,
 ) {
-  if (expiryList.length !== merkleLeafList.length) {
+  if (proofList.length !== merkleLeafList.length) {
     throw new Error("expiryList and merkleLeafList must have the same length");
   }
 
@@ -49,18 +79,19 @@ export function appendExpiryAndMerkleToCSV(
   const header = lines[0].trim();
   
   if (!header.includes(`expiry${num}`)) {
-    lines[0] = `${header},expiry${num},merkleLeaf${num}`;
+    lines[0] = `${header},expiry${num},merkleLeaf${num},proof${num}`;
   }
 
-  for (let i = 0; i < expiryList.length; i++) {
+  for (let i = 0; i < proofList.length; i++) {
     const lineIndex = offset + 1 + i; // +1 to skip header
     if (lines[lineIndex]) {
-      lines[lineIndex] = `${lines[lineIndex]},${expiryList[i]},${merkleLeafList[i]}`;
+      const proofStr = JSON.stringify(proofList[i]);
+      lines[lineIndex] = `${lines[lineIndex]},${expiry},${merkleLeafList[i]},${proofStr}`;
     }
   }
 
   fs.writeFileSync(inputFile, lines.join("\n"));
-  console.log(`Updated ${inputFile} with expiry${num} and merkleLeaf${num}`);
+  console.log(`Updated ${inputFile} with expiry${num} and merkleLeaf${num}, and proof${num}`);
 }
 
 /**
