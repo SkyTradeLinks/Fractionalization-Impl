@@ -16,7 +16,6 @@ import { initializeContracts } from "../scripts/polymath-deploy";
 import { randomInt } from "crypto";
 
 import { encodeModuleCall } from "./helpers/encodeCall";
-import { readInvestorsFromCSV, updateBalancesInCSV, appendBatchDataToCSV, appendExpiryAndMerkleToCSVWithProof } from "./helpers/readAccountsBatch";
 import csv from "csv-parser";
 import PQueue from "p-queue";
 import fs from "fs";
