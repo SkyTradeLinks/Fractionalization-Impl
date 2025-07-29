@@ -7,9 +7,9 @@ function getRandomInvestorClass(): number {
 }
 
 const OUTPUT_FILE = "accounts.csv";
-const TOTAL = 10000;
-const BATCH_SIZE = 500;
-const FUND_AMOUNT = "0.01"; // ETH per account
+const TOTAL = 10;
+const BATCH_SIZE = 10;
+const FUND_AMOUNT = "0.005"; // ETH per account
 
 async function main() {
   console.log("Process started");
@@ -44,7 +44,7 @@ async function main() {
       await tx.wait(); // Wait to ensure it's mined
 
       // Get balance (optional but accurate)
-      const balance = await hre.ethers.provider.getBalance(wallet.address);
+      const balance = hre.ethers.parseEther(FUND_AMOUNT);
 
       lines.push(
         `${index},${wallet.address},${wallet.privateKey},${isAccredited},${investorClass},${balance}`
