@@ -85,7 +85,7 @@ export function appendExpiryAndMerkleToCSVWithProof(
   for (let i = 0; i < proofList.length; i++) {
     const lineIndex = offset + 1 + i; // +1 to skip header
     if (lines[lineIndex]) {
-      const proofStr = JSON.stringify(proofList[i]);
+      const proofStr = `"${JSON.stringify(proofList[i]).replace(/"/g, '""')}"`;
       lines[lineIndex] = `${lines[lineIndex]},${expiry},${merkleLeafList[i]},${proofStr}`;
     }
   }
