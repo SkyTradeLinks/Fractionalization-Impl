@@ -156,6 +156,15 @@ type TokenPurchase @entity(immutable: false) {
   timestamp: BigInt!
 }
 
+type PaymentToken @entity(immutable: false) {
+  id: ID!
+  stoAddress: Bytes!
+  sender: Bytes!
+  wallet: Bytes!
+  tokens: [Bytes!]!
+  timestamp: BigInt!
+}
+
 type ERC20DividendDeposited @entity(immutable: false) {
   id: ID!
   depositor: Bytes!

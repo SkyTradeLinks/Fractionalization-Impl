@@ -1,5 +1,6 @@
-import { STOState, TokenPurchase as TokenPurchaseSchema } from "../../generated/schema"
-import { TokenPurchase } from "../../generated/templates/USDTieredSTO/USDTieredSTO"
+import { Address, Bytes } from "@graphprotocol/graph-ts";
+import { STOState, TokenPurchase as TokenPurchaseSchema, PaymentToken as PaymentTokenSchema } from "../../generated/schema"
+import { TokenPurchase, SetAddresses } from "../../generated/templates/USDTieredSTO/USDTieredSTO"
 
 
 export function handleTokenPurchase(event: TokenPurchase): void {
@@ -31,6 +32,25 @@ export function handleTokenPurchase(event: TokenPurchase): void {
     sto.tokensSold = sto.tokensSold.plus(event.params._tokens);
   }
   sto.save();
+}
+
+export function handleSetAddresses(event: SetAddresses): void {
+  const id = event.transaction.hash.toHex();
+  let entity = PaymentTokenSchema.load(id);
+
+  if (!entity) {
+    entity = new PaymentTokenSchema(id);
+    entity.sender = event.transaction.from;
+    entity.stoAddress = event.address;
+    
+    // Convert address[] -> Bytes[]
+    entity.tokens = event.params._usdTokens.map<Bytes>((addr: Address) => addr as Bytes);
+
+    entity.wallet = event.params._wallet;
+    entity.timestamp = event.block.timestamp;
+  }
+
+  entity.save();
 }
 
 

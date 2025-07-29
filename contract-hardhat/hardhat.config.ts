@@ -1,6 +1,7 @@
 import { HardhatUserConfig } from "hardhat/config";
 import dotenv from "dotenv";
 import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-verify";
 
 
 const dotenvResult = dotenv.config();
@@ -26,6 +27,10 @@ const config: HardhatUserConfig = {
             details: { yul: false },
           },
           viaIR: true,
+          metadata: {
+            bytecodeHash: "none", // disable ipfs
+            useLiteralContent: true, // use source code
+          },
         },
       },
     ],
@@ -54,6 +59,20 @@ const config: HardhatUserConfig = {
       chainId: 10143,
       timeout: 60 * 60 * 1000, // 1 hour
     },
+    bnbMainnet: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 56,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
   },
+  sourcify: {
+    enabled: true,
+    apiUrl: "https://sourcify-api-monad.blockvision.org",
+    browserUrl: "https://testnet.monadexplorer.com"
+  },
+  etherscan: {
+    enabled: false
+  }
 };
 export default config;

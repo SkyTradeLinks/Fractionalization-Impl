@@ -8,7 +8,7 @@ dataSources:
     name: TradingRestrictionManager
     network: monad-testnet
     source:
-      address: '0xfAe5cD544075f83299f5c6C5bCE70f0804ECe4F7'
+      address: '0x57B4332f1f6ea6f5d19d0a08d909b3f6Bc2E98bc'
       abi: TradingRestrictionManager
       startBlock: 25267639
     mapping:
@@ -129,6 +129,8 @@ templates:
       eventHandlers:
         - event: TokenPurchase(indexed address,indexed address,uint256,uint256,uint256,uint256)
           handler: handleTokenPurchase
+        - event: SetAddresses(indexed address,address[])
+          handler: handleSetAddresses
 
   - name: ERC20DividendCheckpoint
     kind: ethereum/contract
