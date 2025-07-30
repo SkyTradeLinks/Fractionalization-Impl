@@ -695,15 +695,10 @@ it("Should whitelist many investors using streamed Merkle batches", async () => 
       { id: "privateKey",    title: "privateKey" },
       { id: "isAccredited",  title: "isAccredited" },
       { id: "investorClass", title: "investorClass" },
-      { id: "currentBalance",title: "currentBalance" },
       { id: "expiry1",       title: "expiry1" },
-      { id: "merkleLeaf1",   title: "merkleLeaf1" },
-      { id: "proof1",        title: "proof1" },
     ],
     append: false, // overwrite any existing OUTPUT_CSV
-  });
-  // write header row
-//   await csvWriter.writeRecords([]);
+    });
 
     const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
     console.log(`Whitelisting batch ${batchOffset} – ${batchOffset + BATCH_SIZE}`);
@@ -719,18 +714,18 @@ it("Should whitelist many investors using streamed Merkle batches", async () => 
 
     const dumpTree = merkleTree.dump();
     const stringifyWithBigInt = (obj: any) =>
-  JSON.stringify(obj, (_, value) =>
-    typeof value === "bigint" ? value.toString() : value,
-    2
-  );
+    JSON.stringify(obj, (_, value) =>
+        typeof value === "bigint" ? value.toString() : value,
+        2
+    );
 
-fs.writeFileSync(
-  `merkle_batches/batch_${batchOffset}_to_${batchOffset + batch.length - 1}.json`,
-  stringifyWithBigInt({
-    root: merkleRoot,
-    tree: dumpTree,
-  })
-);
+    fs.writeFileSync(
+    `merkle_batches/batch_${batchOffset}_to_${batchOffset + batch.length - 1}.json`,
+    stringifyWithBigInt({
+        root: merkleRoot,
+        tree: dumpTree,
+    })
+    );
 
     
     // Upload root to on-chain contract
@@ -747,7 +742,6 @@ fs.writeFileSync(
       const [address, expiry, isAccredited] = values[i];
       const proof = merkleTree.getProof(i);
       const signer = new Wallet(investor.privateKey, provider);
-      const leaf = merkleTree.leafHash(values[i]);
 
       await I_TradingRestrictionManager.connect(signer)
         .verifyInvestor(proof, address, expiry, isAccredited, investor.investorClass)
@@ -757,8 +751,6 @@ fs.writeFileSync(
         id: i,
         ...investor,
         expiry1: expiry.toString(),
-        merkleLeaf1: leaf,
-        proof1: JSON.stringify(proof),
       });
     })));
     // append to OUTPUT_CSV
@@ -832,13 +824,18 @@ it("Should issue tokens to all whitelisted investors", async () => {
     const [minAmount, maxAmount] =
       batchOffset + BATCH_SIZE <= smallThreshold ? [1000, 3000] : [10_000, 30_000];
 
+    const treeJsonPath = `merkle_batches/batch_${batchOffset}_to_${batchOffset + batch.length - 1}.json`;
+    const treeJson = JSON.parse(fs.readFileSync(treeJsonPath, "utf-8"));
+
+    const tree = StandardMerkleTree.load(treeJson.tree);
+
     const investorQueue = new PQueue({ concurrency: 5 });
 
     await investorQueue.addAll(
-    batch.map((investor) => async () => {
+    batch.map((investor, i) => async () => {
       const address = investor.address;
       const signer = new Wallet(investor.privateKey, provider);
-      const proof = investor.proof || [];
+      const proof = tree.getProof(i);
       const expiry = BigInt(investor.expiry || "0");
       const isAccredited = investor.isAccredited;
 
@@ -891,9 +888,7 @@ it("Should issue tokens to all whitelisted investors", async () => {
           privateKey: row.privateKey,
           isAccredited: row.isAccredited === "true",
           investorClass: parseInt(row.investorClass || "0"),
-          currentBalance: BigInt(row.currentBalance || "0"),
           expiry: row.expiry1,
-          proof: JSON.parse(row.proof1),
         };
 
         currentBatch.push(investor);

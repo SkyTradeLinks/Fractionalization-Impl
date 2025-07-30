@@ -1,69 +1,68 @@
 import fs from "fs";
-import { Wallet } from "ethers";
+import { Wallet, parseEther } from "ethers";
 import hre from "hardhat";
-
-function getRandomInvestorClass(): number {
-  return Math.floor(Math.random() * 2);
-}
+import PQueue from "p-queue";
 
 const OUTPUT_FILE = "accounts.csv";
-const TOTAL = 200;
+const TOTAL = 500;
 const BATCH_SIZE = 100;
 const FUND_AMOUNT = "0.01"; // ETH per account
 
-async function main() {
-  console.log("Process started");
+const getRandomInvestorClass = () => Math.floor(Math.random() * 2);
 
+async function main() {
+  console.log("🚀 Starting wallet generation and funding...");
   const [faucet] = await hre.ethers.getSigners();
 
-  if (!faucet || !faucet.sendTransaction) {
-    throw new Error("Faucet signer not available");
-  }
-
-  // Write CSV header with currentBalance
-  fs.writeFileSync(
-    OUTPUT_FILE,
-    "index,address,privateKey,isAccredited,investorClass,currentBalance\n"
-  );
+  // Use write stream for better performance
+  const stream = fs.createWriteStream(OUTPUT_FILE, { flags: "w" });
+  stream.write("index,address,privateKey,isAccredited,investorClass\n");
 
   for (let batchStart = 0; batchStart < TOTAL; batchStart += BATCH_SIZE) {
-    const lines: string[] = [];
+    const batch: string[] = [];
 
-    for (let i = 0; i < BATCH_SIZE && batchStart + i < TOTAL; i++) {
-      const index = batchStart + i;
-      const wallet = Wallet.createRandom();
-      const isAccredited = Math.random() < 0.5;
-      const investorClass = getRandomInvestorClass();
+    const wallets: Wallet[] = Array.from({ length: BATCH_SIZE }, () =>
+      Wallet.createRandom()
+    );
 
-      // Send ETH from faucet to investor wallet
-      const tx = await faucet.sendTransaction({
-        to: wallet.address,
-        value: hre.ethers.parseEther(FUND_AMOUNT),
-      });
+    const txQueue = new PQueue({ concurrency: 10 });
 
-      await tx.wait(); // Wait to ensure it's mined
+    await Promise.all(
+      wallets.map((wallet, i) => {
+        const index = batchStart + i;
+        const isAccredited = Math.random() < 0.5;
+        const investorClass = getRandomInvestorClass();
 
-      // Get balance (optional but accurate)
-      const balance = await hre.ethers.provider.getBalance(wallet.address);
+        // Fund wallet
+        return txQueue.add(async () => {
+          const tx = await faucet.sendTransaction({
+            to: wallet.address,
+            value: parseEther(FUND_AMOUNT),
+          });
+          await tx.wait();
 
-      lines.push(
-        `${index},${wallet.address},${wallet.privateKey},${isAccredited},${investorClass},${balance}`
-      );
-    }
+          batch.push(
+            `${index},${wallet.address},${wallet.privateKey},${isAccredited},${investorClass}`
+          );
+        });
+      })
+    );
 
-    fs.appendFileSync(OUTPUT_FILE, lines.join("\n") + "\n");
+    // Write to file after batch
+    stream.write(batch.join("\n") + "\n");
     console.log(
-      ` Batch ${batchStart / BATCH_SIZE + 1} complete (${Math.min(
+      `✅ Batch ${batchStart / BATCH_SIZE + 1} complete (${Math.min(
         batchStart + BATCH_SIZE,
         TOTAL
       )}/${TOTAL})`
     );
   }
 
-  console.log(`Done! Generated ${TOTAL} funded accounts in ${OUTPUT_FILE}`);
+  stream.end();
+  console.log(`🎉 Done! ${TOTAL} accounts saved in ${OUTPUT_FILE}`);
 }
 
 main().catch((err) => {
-  console.error(" Error:", err);
+  console.error("❌ Error:", err);
   process.exit(1);
 });
