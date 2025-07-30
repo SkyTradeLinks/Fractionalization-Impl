@@ -1,6 +1,7 @@
-import { Address, Bytes } from "@graphprotocol/graph-ts";
+import { Address, Bytes, log, BigInt } from "@graphprotocol/graph-ts";
 import { STOState, TokenPurchase as TokenPurchaseSchema, PaymentToken as PaymentTokenSchema } from "../../generated/schema"
 import { TokenPurchase, SetAddresses } from "../../generated/templates/USDTieredSTO/USDTieredSTO"
+import { ERC20 } from "../../generated/templates/USDTieredSTO/ERC20"
 
 
 export function handleTokenPurchase(event: TokenPurchase): void {
@@ -12,6 +13,19 @@ export function handleTokenPurchase(event: TokenPurchase): void {
     entity = new TokenPurchaseSchema(id)
   }
 
+  const paymentTokenSchema = PaymentTokenSchema.load(id);
+
+  if (paymentTokenSchema == null) {
+    // Optionally log a warning and return
+    log.warning("No PaymentTokenSchema found for tx: {}", [id]);
+    return;
+  }
+
+  let tierIndex = event.params._tier.toI32();
+  let paymentTokenAddress = paymentTokenSchema.tokens[tierIndex];
+  
+  const paymentTokenContract = ERC20.bind(Address.fromBytes(paymentTokenAddress));
+
   entity.purchaser = event.params._purchaser;
   entity.beneficiary = event.params._beneficiary;
   entity.tokens = event.params._tokens;
@@ -19,6 +33,7 @@ export function handleTokenPurchase(event: TokenPurchase): void {
   entity.tierPrice = event.params._tierPrice;
   entity.tier = event.params._tier;
   entity.contractAddress = event.address;
+  entity.paymentTokenDecimal = BigInt.fromI32(paymentTokenContract.decimals());
   entity.timestamp = event.block.timestamp;
 
   entity.save()
@@ -35,7 +50,7 @@ export function handleTokenPurchase(event: TokenPurchase): void {
 }
 
 export function handleSetAddresses(event: SetAddresses): void {
-  const id = event.transaction.hash.toHex();
+  const id = event.address.toHex();
   let entity = PaymentTokenSchema.load(id);
 
   if (!entity) {

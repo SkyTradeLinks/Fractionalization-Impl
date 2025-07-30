@@ -6,7 +6,8 @@ import {
   AccountUser as AccountUserSchema,
   UserDividend,
 } from "../../generated/schema"
-import { ERC20DividendCheckpoint, ERC20DividendClaimed as ERC20DividendClaimedEvent, ERC20DividendDeposited, ERC20DividendDeposited as ERC20DividendDepositedEvent } from "../../generated/templates/ERC20DividendCheckpoint/ERC20DividendCheckpoint";
+import { ERC20DividendCheckpoint, ERC20DividendClaimed as ERC20DividendClaimedEvent, ERC20DividendDeposited as ERC20DividendDepositedEvent } from "../../generated/templates/ERC20DividendCheckpoint/ERC20DividendCheckpoint";
+import { ERC20 } from "../../generated/templates/ERC20DividendCheckpoint/ERC20";
 import { CHANNEL_ADDRESS } from "../constant";
 import { sendPushNotification } from "../helpers/pushNotification";
 import { Address, BigInt } from "@graphprotocol/graph-ts";
@@ -72,11 +73,14 @@ export function handleDividendCreation(event: ERC20DividendDepositedEvent): void
       userDividend = new UserDividend(userDividendId);
     }
 
+    const paymentTokenContract = ERC20.bind(Address.fromString(userDividend.token));
+
     userDividend.creationUnixTimestamp = event.block.timestamp;
     userDividend.transactionHash = event.transaction.hash;
     userDividend.totalClaimableAmount = dividend.getValue0();
     userDividend.claim = dividend.getValue0();
     userDividend.withheld = dividend.getValue1();
+    userDividend.claimTokenDecimal = BigInt.fromI32(paymentTokenContract.decimals());
     userDividend.token = token;
     userDividend.user = user;
 

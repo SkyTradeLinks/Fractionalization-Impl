@@ -101,6 +101,7 @@ type UserDividend @entity(immutable: false) {
   claim: BigInt! 
   creationUnixTimestamp: BigInt! 
   totalClaimableAmount: BigInt!
+  claimTokenDecimal: BigInt!
   transactionHash: Bytes! 
   withheld: BigInt!
   token: SecurityToken!
@@ -150,6 +151,7 @@ type TokenPurchase @entity(immutable: false) {
   purchaser: Bytes!
   beneficiary: Bytes!
   tokens: BigInt!
+  paymentTokenDecimal: BigInt!
   usdAmount: BigInt!
   tierPrice: BigInt!
   tier: BigInt!
