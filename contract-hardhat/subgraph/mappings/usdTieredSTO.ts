@@ -13,8 +13,8 @@ export function handleTokenPurchase(event: TokenPurchase): void {
     entity = new TokenPurchaseSchema(id)
   }
 
-  const paymentTokenSchema = PaymentTokenSchema.load(id);
-
+  const paymentTokenSchema = PaymentTokenSchema.load(event.address.toHex()); // Payment token already stored when STO was created
+  
   if (paymentTokenSchema == null) {
     // Optionally log a warning and return
     log.warning("No PaymentTokenSchema found for tx: {}", [id]);

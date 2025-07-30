@@ -57,6 +57,7 @@ export function handleDividendCreation(event: ERC20DividendDepositedEvent): void
   const users = accountUsers.user;
 
   const totalSupply = dividendContract.dividends(event.params._dividendIndex).getTotalSupply();
+  const paymentTokenContract = ERC20.bind(Address.fromString(token));
 
 
   for (let i = 0; i < users.length; i++) {
@@ -72,8 +73,6 @@ export function handleDividendCreation(event: ERC20DividendDepositedEvent): void
     if (!userDividend) {
       userDividend = new UserDividend(userDividendId);
     }
-
-    const paymentTokenContract = ERC20.bind(Address.fromString(userDividend.token));
 
     userDividend.creationUnixTimestamp = event.block.timestamp;
     userDividend.transactionHash = event.transaction.hash;
@@ -140,6 +139,7 @@ export function handleDividendClaim(event: ERC20DividendClaimedEvent): void {
   }
 
   const users = accountUsers.user;
+  const paymentTokenContract = ERC20.bind(Address.fromString(token));
 
 
   for (let i = 0; i < users.length; i++) {
@@ -159,6 +159,7 @@ export function handleDividendClaim(event: ERC20DividendClaimedEvent): void {
       // Intentional skip userDividend.totalClaimableAmount = dividend.getValue0();
       userDividend.claim = dividend.getValue0();
       userDividend.withheld = dividend.getValue1();
+      userDividend.claimTokenDecimal = BigInt.fromI32(paymentTokenContract.decimals());
       userDividend.token = token;
       userDividend.user = user;
 
@@ -173,6 +174,7 @@ export function handleDividendClaim(event: ERC20DividendClaimedEvent): void {
 
       userDividend.claim = dividend.getValue0();
       userDividend.withheld = dividend.getValue1();
+      userDividend.claimTokenDecimal = BigInt.fromI32(paymentTokenContract.decimals());
       userDividend.token = token;
       userDividend.user = user;
 
