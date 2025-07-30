@@ -717,6 +717,22 @@ it("Should whitelist many investors using streamed Merkle batches", async () => 
     const merkleRoot = merkleTree.root;
     // const merkleLeafList = values.map((v) => merkleTree.leafHash(v));
 
+    const dumpTree = merkleTree.dump();
+    const stringifyWithBigInt = (obj: any) =>
+  JSON.stringify(obj, (_, value) =>
+    typeof value === "bigint" ? value.toString() : value,
+    2
+  );
+
+fs.writeFileSync(
+  `merkle_batches/batch_${batchOffset}_to_${batchOffset + batch.length - 1}.json`,
+  stringifyWithBigInt({
+    root: merkleRoot,
+    tree: dumpTree,
+  })
+);
+
+    
     // Upload root to on-chain contract
     await I_TradingRestrictionManager.connect(token_owner).modifyKYCData(merkleRoot);
     await increaseTime(duration.days(2));
@@ -761,7 +777,6 @@ it("Should whitelist many investors using streamed Merkle batches", async () => 
           privateKey: row.privateKey,
           isAccredited: row.isAccredited === "true",
           investorClass: parseInt(row.investorClass || "0"),
-          currentBalance: BigInt(row.currentBalance || "0"),
         };
 
         currentBatch.push(investor);
