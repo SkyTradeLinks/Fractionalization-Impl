@@ -4,7 +4,7 @@ import hre from "hardhat";
 import PQueue from "p-queue";
 
 const OUTPUT_FILE = "accounts.csv";
-const TOTAL = 10000;
+const TOTAL = 50000;
 const BATCH_SIZE = 100;
 const FUND_AMOUNT = "0.01"; // ETH per account
 const expiry = Math.floor(Date.now() / 1000) + 2 * 365 * 24 * 60 * 60; //2 years from now

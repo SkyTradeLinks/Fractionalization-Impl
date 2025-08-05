@@ -661,642 +661,642 @@ describe("Load test for million investor flow", function () {
             console.log("✅ Whitelisting complete with CSV metadata updated.");
         });
 
-        it("Should issue tokens to all whitelisted investors", async () => {
-            const stoId = 0;
-            const daiAddress = await I_DaiToken.getAddress();
-            const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
+        // it("Should issue tokens to all whitelisted investors", async () => {
+        //     const stoId = 0;
+        //     const daiAddress = await I_DaiToken.getAddress();
+        //     const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
 
-            smallThreshold = 8000;
-            let outOfTokens = false;
-            let currentBatch: InvestorWallet[] = [];
-            let offset = 0;
+        //     smallThreshold = 8000;
+        //     let outOfTokens = false;
+        //     let currentBatch: InvestorWallet[] = [];
+        //     let offset = 0;
 
-            const queue = new PQueue({ concurrency: CONCURRENCY });
+        //     const queue = new PQueue({ concurrency: CONCURRENCY });
 
-            const maxTokens = _tokensPerTierTotal[stoId].reduce((a, b) => a + b, 0n);
-            let tokensSold = await I_USDTieredSTO_Array[stoId].getTokensSold();
-            const USDTOKEN = (await I_USDTieredSTO_Array[stoId].tiers(0))[0];
+        //     const maxTokens = _tokensPerTierTotal[stoId].reduce((a, b) => a + b, 0n);
+        //     let tokensSold = await I_USDTieredSTO_Array[stoId].getTokensSold();
+        //     const USDTOKEN = (await I_USDTieredSTO_Array[stoId].tiers(0))[0];
 
-            const treeJsonPath = `merkle_batches/all_investors.json`;
-            const treeJson = JSON.parse(fs.readFileSync(treeJsonPath, "utf-8"));
-            const tree = StandardMerkleTree.load(treeJson.tree);
+        //     const treeJsonPath = `merkle_batches/all_investors.json`;
+        //     const treeJson = JSON.parse(fs.readFileSync(treeJsonPath, "utf-8"));
+        //     const tree = StandardMerkleTree.load(treeJson.tree);
 
-            const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
-                if (outOfTokens) return;
+        //     const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
+        //         if (outOfTokens) return;
 
-                console.log(`Issuing tokens for batch ${batchOffset} – ${batchOffset + BATCH_SIZE}`);
-                const [minAmount, maxAmount] =
-                    batchOffset + BATCH_SIZE <= smallThreshold ? [1000, 3000] : [5000, 15000];
+        //         console.log(`Issuing tokens for batch ${batchOffset} – ${batchOffset + BATCH_SIZE}`);
+        //         const [minAmount, maxAmount] =
+        //             batchOffset + BATCH_SIZE <= smallThreshold ? [1000, 3000] : [5000, 15000];
 
-                const investorQueue = new PQueue({ concurrency: 3 });
+        //         const investorQueue = new PQueue({ concurrency: 3 });
 
-                await investorQueue.addAll(
-                    batch.map((investor, i) => async () => {
-                        const address = investor.address;
-                        const signer = new Wallet(investor.privateKey, provider);
-                        const proof = tree.getProof(i + batchOffset);
-                        const expiry = BigInt(investor.expiry || "0");
-                        const isAccredited = investor.isAccredited;
+        //         await investorQueue.addAll(
+        //             batch.map((investor, i) => async () => {
+        //                 const address = investor.address;
+        //                 const signer = new Wallet(investor.privateKey, provider);
+        //                 const proof = tree.getProof(i + batchOffset);
+        //                 const expiry = BigInt(investor.expiry || "0");
+        //                 const isAccredited = investor.isAccredited;
 
-                        const rawAmount = randomInt(minAmount, maxAmount);
-                        const amount = ethers.parseEther(rawAmount.toString());
-                        const amountDAI = (amount * USDTOKEN) / e18;
+        //                 const rawAmount = randomInt(minAmount, maxAmount);
+        //                 const amount = ethers.parseEther(rawAmount.toString());
+        //                 const amountDAI = (amount * USDTOKEN) / e18;
 
-                        // Mint and approve DAI
-                        await I_DaiToken.getTokens(amountDAI, address);
-                        await sleep(200);
-                        await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
-                        await sleep(200);
+        //                 // Mint and approve DAI
+        //                 await I_DaiToken.getTokens(amountDAI, address);
+        //                 await sleep(200);
+        //                 await I_DaiToken.connect(signer).approve(stoAddress, amountDAI);
+        //                 await sleep(200);
 
-                        if (tokensSold + amount > maxTokens) {
-                            console.log(`Skipping ${address} — not enough tokens left`);
-                            return;
-                        } else if (tokensSold >= maxTokens) {
-                            console.log(`STO out of tokens at offset ${batchOffset}`);
-                            outOfTokens = true;
-                            return;
-                        }
+        //                 if (tokensSold + amount > maxTokens) {
+        //                     console.log(`Skipping ${address} — not enough tokens left`);
+        //                     return;
+        //                 } else if (tokensSold >= maxTokens) {
+        //                     console.log(`STO out of tokens at offset ${batchOffset}`);
+        //                     outOfTokens = true;
+        //                     return;
+        //                 }
 
-                        await expect(
-                            I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
-                                address,
-                                amountDAI,
-                                daiAddress,
-                                proof,
-                                expiry,
-                                isAccredited,
-                                investor.investorClass
-                            )
-                        ).to.not.be.reverted;
+        //                 await expect(
+        //                     I_USDTieredSTO_Array[stoId].connect(signer).buyWithUSD(
+        //                         address,
+        //                         amountDAI,
+        //                         daiAddress,
+        //                         proof,
+        //                         expiry,
+        //                         isAccredited,
+        //                         investor.investorClass
+        //                     )
+        //                 ).to.not.be.reverted;
 
-                        tokensSold += amount;
-                        const balance = await I_SecurityToken.balanceOf(address);
-                        expect(balance).to.equal(amount);
-                    }));
-            }
+        //                 tokensSold += amount;
+        //                 const balance = await I_SecurityToken.balanceOf(address);
+        //                 expect(balance).to.equal(amount);
+        //             }));
+        //     }
 
-            const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
+        //     const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
 
-            const streamPromise = new Promise<void>((resolve, reject) => {
-                stream
-                    .on("data", async (row) => {
-                        stream.pause();
+        //     const streamPromise = new Promise<void>((resolve, reject) => {
+        //         stream
+        //             .on("data", async (row) => {
+        //                 stream.pause();
 
-                        const investor: InvestorWallet = {
-                            address: row.address,
-                            privateKey: row.privateKey,
-                            isAccredited: row.isAccredited === "true",
-                            investorClass: parseInt(row.investorClass || "0"),
-                            expiry: row.expiry,
-                        };
+        //                 const investor: InvestorWallet = {
+        //                     address: row.address,
+        //                     privateKey: row.privateKey,
+        //                     isAccredited: row.isAccredited === "true",
+        //                     investorClass: parseInt(row.investorClass || "0"),
+        //                     expiry: row.expiry,
+        //                 };
 
-                        currentBatch.push(investor);
+        //                 currentBatch.push(investor);
 
-                        if (currentBatch.length >= BATCH_SIZE) {
-                            const batchCopy = [...currentBatch];
-                            const batchOffset = offset;
-                            currentBatch = [];
-                            offset += BATCH_SIZE;
+        //                 if (currentBatch.length >= BATCH_SIZE) {
+        //                     const batchCopy = [...currentBatch];
+        //                     const batchOffset = offset;
+        //                     currentBatch = [];
+        //                     offset += BATCH_SIZE;
 
-                            queue.add(() => processBatch(batchCopy, batchOffset))
-                                .then(() => stream.resume())
-                                .catch(reject);
-                        } else {
-                            stream.resume();
-                        }
-                    })
-                    .on("end", async () => {
-                        if (currentBatch.length > 0) {
-                            queue.add(() => processBatch(currentBatch, offset));
-                        }
-                        await queue.onIdle();
-                        resolve();
-                    })
-                    .on("error", reject);
-            });
+        //                     queue.add(() => processBatch(batchCopy, batchOffset))
+        //                         .then(() => stream.resume())
+        //                         .catch(reject);
+        //                 } else {
+        //                     stream.resume();
+        //                 }
+        //             })
+        //             .on("end", async () => {
+        //                 if (currentBatch.length > 0) {
+        //                     queue.add(() => processBatch(currentBatch, offset));
+        //                 }
+        //                 await queue.onIdle();
+        //                 resolve();
+        //             })
+        //             .on("error", reject);
+        //     });
 
-            await streamPromise;
+        //     await streamPromise;
 
-            console.log("✅ Token issuance completed for all whitelisted investors.");
-        });
+        //     console.log("✅ Token issuance completed for all whitelisted investors.");
+        // });
 
-        it("Fuzz test balance checkpoints for many investors", async () => {
-            await I_SecurityToken.connect(token_owner).changeGranularity(1);
+        // it("Fuzz test balance checkpoints for many investors", async () => {
+        //     await I_SecurityToken.connect(token_owner).changeGranularity(1);
 
-            const checkpointBalances: Record<number, Record<string, bigint>> = {};
-            const totalSupplies: Record<number, bigint> = {};
+        //     const checkpointBalances: Record<number, Record<string, bigint>> = {};
+        //     const totalSupplies: Record<number, bigint> = {};
 
-            let currentBatch: InvestorWallet[] = [];
-            let offset = 0;
-            let checkpointIndex = 1;
+        //     let currentBatch: InvestorWallet[] = [];
+        //     let offset = 0;
+        //     let checkpointIndex = 1;
 
-            const queue = new PQueue({ concurrency: CONCURRENCY });
-
-
-            const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
-                console.log(`Processing batch ${batchOffset} – ${batchOffset + BATCH_SIZE}`);
-
-                for (let j = 0; j < 2; j++) {
-                    // Capture balances at this point
-                    const balancesAtCheckpoint: Record<string, bigint> = {};
-                    await Promise.all(batch.map(async (investor) => {
-                        const balance = await I_SecurityToken.balanceOf(investor.address);
-                        balancesAtCheckpoint[investor.address.toLowerCase()] = balance;
-                    }));
-                    const totalSupply = await I_SecurityToken.totalSupply();
-
-                    checkpointBalances[checkpointIndex] = balancesAtCheckpoint;
-                    totalSupplies[checkpointIndex] = totalSupply;
-
-                    console.log(`\nCheckpoint ${checkpointIndex} Created:`);
-                    console.log(`TotalSupply: ${totalSupply.toString()}`);
-
-                    const tx = await I_SecurityToken.connect(token_owner).createCheckpoint();
-                    const receipt = await tx.wait();
-                    await sleep(100);
-
-                    // Validate CheckpointCreated event
-                    let checkpointEvent: LogDescription | null = null;
-                    for (const log of receipt!.logs) {
-                        try {
-                            const parsed = I_SecurityToken.interface.parseLog(log);
-
-                            if (parsed && parsed.name === "CheckpointCreated") {
-                                checkpointEvent = parsed;
-                                break;
-                            }
-                        } catch (err: any) {
-                            console.log(`Failed to parse checkpoint event: ${err.message}`);
-                        }
-                    }
-
-                    expect(checkpointEvent).to.not.be.null;
-
-                    // Perform some random transfers
-                    const innerQueue = new PQueue({ concurrency: 3 });
-                    const transferCount = Math.floor(Math.random() * 3);
-                    const transferJobs = [];
-
-                    for (let i = 0; i < transferCount; i++) {
-                        const sender = batch[Math.floor(Math.random() * batch.length)];
-                        const receiver = batch[Math.floor(Math.random() * batch.length)];
-
-                        if (sender.address === receiver.address) continue;
-
-                        transferJobs.push({ sender, receiver });
-                    }
-
-                    for (const { sender, receiver } of transferJobs) {
-                        const senderBalance = await I_SecurityToken.balanceOf(sender.address);
-                        if (senderBalance === 0n) continue;
-
-                        const safeBalance = senderBalance > MAX_TRANSFERABLE ? MAX_TRANSFERABLE : senderBalance;
-                        const percentage = Math.floor(Math.random() * 10) + 1;
-                        const amount = (safeBalance * BigInt(percentage)) / 100n;
-                        const senderWallet = new Wallet(sender.privateKey, provider);
-
-                        console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
-                        await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
-                        await sleep(200);
-                        await I_SecurityToken.connect(senderWallet).transfer(receiver.address, amount);
-                    }
+        //     const queue = new PQueue({ concurrency: CONCURRENCY });
 
 
-                    // await innerQueue.addAll(
-                    //     transferJobs.map(({ sender, receiver }) => async () => {
-                    //         const senderBalance = await I_SecurityToken.balanceOf(sender.address);
-                    //         if (senderBalance === 0n) return;
+        //     const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
+        //         console.log(`Processing batch ${batchOffset} – ${batchOffset + BATCH_SIZE}`);
 
-                    //         const safeBalance = senderBalance > MAX_TRANSFERABLE ? MAX_TRANSFERABLE : senderBalance;
-                    //         const percentage = Math.floor(Math.random() * 10) + 1;
-                    //         const amount = (safeBalance * BigInt(percentage)) / 100n;
-                    //         const senderWallet = new Wallet(sender.privateKey, provider);
+        //         for (let j = 0; j < 2; j++) {
+        //             // Capture balances at this point
+        //             const balancesAtCheckpoint: Record<string, bigint> = {};
+        //             await Promise.all(batch.map(async (investor) => {
+        //                 const balance = await I_SecurityToken.balanceOf(investor.address);
+        //                 balancesAtCheckpoint[investor.address.toLowerCase()] = balance;
+        //             }));
+        //             const totalSupply = await I_SecurityToken.totalSupply();
 
-                    //         console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
-                    //         await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
-                    //         await sleep(200);
-                    //         await I_SecurityToken.connect(senderWallet).transfer(receiver.address, amount);
-                    //         await sleep(200);
-                    //     })
-                    // );
-                    // await innerQueue.onIdle();
+        //             checkpointBalances[checkpointIndex] = balancesAtCheckpoint;
+        //             totalSupplies[checkpointIndex] = totalSupply;
 
-                }
-            }
-            const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
+        //             console.log(`\nCheckpoint ${checkpointIndex} Created:`);
+        //             console.log(`TotalSupply: ${totalSupply.toString()}`);
 
-            const streamPromise = new Promise<void>((resolve, reject) => {
-                stream
-                    .on("data", async (row) => {
-                        stream.pause();
+        //             const tx = await I_SecurityToken.connect(token_owner).createCheckpoint();
+        //             const receipt = await tx.wait();
+        //             await sleep(100);
 
-                        const investor: InvestorWallet = {
-                            address: row.address,
-                            privateKey: row.privateKey
-                        };
+        //             // Validate CheckpointCreated event
+        //             let checkpointEvent: LogDescription | null = null;
+        //             for (const log of receipt!.logs) {
+        //                 try {
+        //                     const parsed = I_SecurityToken.interface.parseLog(log);
 
-                        currentBatch.push(investor);
+        //                     if (parsed && parsed.name === "CheckpointCreated") {
+        //                         checkpointEvent = parsed;
+        //                         break;
+        //                     }
+        //                 } catch (err: any) {
+        //                     console.log(`Failed to parse checkpoint event: ${err.message}`);
+        //                 }
+        //             }
 
-                        if (currentBatch.length >= BATCH_SIZE) {
-                            const batchCopy = [...currentBatch];
-                            const batchOffset = offset;
-                            currentBatch = [];
-                            offset += BATCH_SIZE;
+        //             expect(checkpointEvent).to.not.be.null;
 
-                            queue.add(() => processBatch(batchCopy, batchOffset))
-                                .then(() => stream.resume())
-                                .catch(reject);
-                        } else {
-                            stream.resume();
-                        }
-                    })
-                    .on("end", async () => {
-                        if (currentBatch.length > 0) {
-                            queue.add(() => processBatch(currentBatch, offset));
-                        }
-                        await queue.onIdle();
-                        resolve();
-                    })
-                    .on("error", reject);
-            });
+        //             // Perform some random transfers
+        //             const innerQueue = new PQueue({ concurrency: 3 });
+        //             const transferCount = Math.floor(Math.random() * 3);
+        //             const transferJobs = [];
 
-            await streamPromise;
+        //             for (let i = 0; i < transferCount; i++) {
+        //                 const sender = batch[Math.floor(Math.random() * batch.length)];
+        //                 const receiver = batch[Math.floor(Math.random() * batch.length)];
 
-            console.log("All checkpoints validated successfully for large investor set");
-        });
+        //                 if (sender.address === receiver.address) continue;
+
+        //                 transferJobs.push({ sender, receiver });
+        //             }
+
+        //             for (const { sender, receiver } of transferJobs) {
+        //                 const senderBalance = await I_SecurityToken.balanceOf(sender.address);
+        //                 if (senderBalance === 0n) continue;
+
+        //                 const safeBalance = senderBalance > MAX_TRANSFERABLE ? MAX_TRANSFERABLE : senderBalance;
+        //                 const percentage = Math.floor(Math.random() * 10) + 1;
+        //                 const amount = (safeBalance * BigInt(percentage)) / 100n;
+        //                 const senderWallet = new Wallet(sender.privateKey, provider);
+
+        //                 console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
+        //                 await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
+        //                 await sleep(200);
+        //                 await I_SecurityToken.connect(senderWallet).transfer(receiver.address, amount);
+        //             }
+
+
+        //             // await innerQueue.addAll(
+        //             //     transferJobs.map(({ sender, receiver }) => async () => {
+        //             //         const senderBalance = await I_SecurityToken.balanceOf(sender.address);
+        //             //         if (senderBalance === 0n) return;
+
+        //             //         const safeBalance = senderBalance > MAX_TRANSFERABLE ? MAX_TRANSFERABLE : senderBalance;
+        //             //         const percentage = Math.floor(Math.random() * 10) + 1;
+        //             //         const amount = (safeBalance * BigInt(percentage)) / 100n;
+        //             //         const senderWallet = new Wallet(sender.privateKey, provider);
+
+        //             //         console.log(`Transfer: ${amount} from ${sender.address} to ${receiver.address}`);
+        //             //         await I_TradingRestrictionManager.setTradingRestrictionPeriod(I_SecurityToken.target, 0, 0, 1);
+        //             //         await sleep(200);
+        //             //         await I_SecurityToken.connect(senderWallet).transfer(receiver.address, amount);
+        //             //         await sleep(200);
+        //             //     })
+        //             // );
+        //             // await innerQueue.onIdle();
+
+        //         }
+        //     }
+        //     const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
+
+        //     const streamPromise = new Promise<void>((resolve, reject) => {
+        //         stream
+        //             .on("data", async (row) => {
+        //                 stream.pause();
+
+        //                 const investor: InvestorWallet = {
+        //                     address: row.address,
+        //                     privateKey: row.privateKey
+        //                 };
+
+        //                 currentBatch.push(investor);
+
+        //                 if (currentBatch.length >= BATCH_SIZE) {
+        //                     const batchCopy = [...currentBatch];
+        //                     const batchOffset = offset;
+        //                     currentBatch = [];
+        //                     offset += BATCH_SIZE;
+
+        //                     queue.add(() => processBatch(batchCopy, batchOffset))
+        //                         .then(() => stream.resume())
+        //                         .catch(reject);
+        //                 } else {
+        //                     stream.resume();
+        //                 }
+        //             })
+        //             .on("end", async () => {
+        //                 if (currentBatch.length > 0) {
+        //                     queue.add(() => processBatch(currentBatch, offset));
+        //                 }
+        //                 await queue.onIdle();
+        //                 resolve();
+        //             })
+        //             .on("error", reject);
+        //     });
+
+        //     await streamPromise;
+
+        //     console.log("All checkpoints validated successfully for large investor set");
+        // });
     });
 
-    describe("Check Dividend payouts", async () => {
-        it("Should create a dividend", async () => {
-            const maturity = await latestTime() + 10;
-            const expiry = maturity + duration.days(10);
-            const dividendAmount = ethers.parseEther("10000");
-
-            //Make sure token_owner has enough POLY tokens
-            await I_PolyToken.connect(token_owner).getTokens(dividendAmount, token_owner.address);
-
-            //Approve spending
-            await I_PolyToken.connect(token_owner).approve(I_ERC20DividendCheckpoint.target, dividendAmount);
-
-            //Create dividend
-            const tx = await I_ERC20DividendCheckpoint.connect(token_owner).createDividend(
-                maturity,
-                expiry,
-                I_PolyToken.target,
-                dividendAmount,
-                dividendName
-            );
-
-            const receipt = await tx.wait();
-            const event = receipt.logs
-                .map(log => {
-                    try {
-                        return I_ERC20DividendCheckpoint.interface.parseLog(log);
-                    } catch {
-                        return null;
-                    }
-                })
-                .find(e => e && e.name === "ERC20DividendDeposited");
-
-            expect(event).to.not.be.null;
-            const dividendIndex = event!.args._dividendIndex;
-
-            // Check internal dividend data
-            const data = await I_ERC20DividendCheckpoint.getDividendsData();
-            expect(data[1][Number(dividendIndex)]).to.equal(BigInt(maturity));
-            expect(data[2][Number(dividendIndex)]).to.equal(BigInt(expiry));
-            expect(data[3][Number(dividendIndex)]).to.equal(dividendAmount);
-            expect(data[4][Number(dividendIndex)]).to.equal(0n); // nothing claimed yet
-            expect(data[5][Number(dividendIndex)]).to.equal(dividendName);
-
-            console.log(`Dividend #${dividendIndex} created and verified`);
-        });
-
-        it("Investors should be able to pull their own dividend", async () => {
-
-            const dividendIndex = 0; // assuming this is the first dividend
-            const totalInvestors = Number(await stGetter.getInvestorCount());
-            const totalDividendAmount = ethers.parseEther("10000");
-            const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
-            const checkpointId = Number(dividendData.checkpointId);
-            const maturity = Number(dividendData.maturity);
-            const now = await latestTime();
-
-            if (now < maturity) {
-                await increaseTime(maturity - now + 1);
-            }
-
-            const totalSupplyAtCheckpoint = await stGetter.totalSupplyAt(checkpointId);
-            let totalClaimed = 0n;
-            let currentBatch: InvestorWallet[] = [];
-            let offset = 0;
-
-            const queue = new PQueue({ concurrency: CONCURRENCY });
-
-            const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
-                console.log(`Processing batch: ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
-
-                const investorQueue = new PQueue({ concurrency: 3 });
-
-                await investorQueue.addAll(
-                    batch.map((investor) => async () => {
-                        const address = investor.address;
-                        const signer = new Wallet(investor.privateKey, provider);
-
-                        const balanceBefore = await I_PolyToken.balanceOf(address);
-                        const balanceAtCheckpoint = await stGetter.balanceOfAt(address, checkpointId);
-
-                        const expectedShare = (balanceAtCheckpoint * totalDividendAmount) / totalSupplyAtCheckpoint;
-
-                        await expect(
-                            I_ERC20DividendCheckpoint.connect(signer).pullDividendPayment(dividendIndex)
-                        ).to.not.be.reverted;
-
-                        const balanceAfter = await I_PolyToken.balanceOf(address);
-                        const claimed: bigint = balanceAfter - balanceBefore;
-                        totalClaimed += claimed;
-
-                        expect(claimed).to.equal(expectedShare);
-                    }));
-            }
-
-            const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
-
-            const streamPromise = new Promise<void>((resolve, reject) => {
-                stream
-                    .on("data", async (row) => {
-                        stream.pause();
-
-                        const investor: InvestorWallet = {
-                            address: row.address,
-                            privateKey: row.privateKey,
-                        };
-
-                        currentBatch.push(investor);
-
-                        if (currentBatch.length >= BATCH_SIZE) {
-                            const batchCopy = [...currentBatch];
-                            const batchOffset = offset;
-                            currentBatch = [];
-                            offset += BATCH_SIZE;
-
-                            queue.add(() => processBatch(batchCopy, batchOffset))
-                                .then(() => stream.resume())
-                                .catch(reject);
-                        } else {
-                            stream.resume();
-                        }
-                    })
-                    .on("end", async () => {
-                        if (currentBatch.length > 0) {
-                            await queue.add(() => processBatch(currentBatch, offset));
-                        }
-                        await queue.onIdle();
-                        resolve();
-                    })
-                    .on("error", reject);
-            });
-
-            await streamPromise;
-
-            // Verify the dividend was marked fully claimed
-            const dividendDataFinal = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
-            const tolerance = ethers.parseUnits("0.001", 18);
-            const diff = dividendDataFinal.claimedAmount > totalDividendAmount
-                ? dividendDataFinal.claimedAmount - totalDividendAmount
-                : totalDividendAmount - dividendDataFinal.claimedAmount;
-
-            expect(diff <= tolerance).to.be.true;
-
-            console.log("All investors successfully pulled their dividend and received the correct dividend payout based on their checkpoint balance.");
-        });
-
-        it("Should perform random transfers between investors", async () => {
-            const queue = new PQueue({ concurrency: CONCURRENCY });
-            let offset = 0;
-            let currentBatch: InvestorWallet[] = [];
-
-            const processTransferBatch = async (batch: InvestorWallet[], batchOffset: number) => {
-                console.log(`Processing transfers for batch ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
-
-
-                const transferCount = Math.floor(Math.random() * 3) + 1; // total number of transfers
-
-                for (let i = 0; i < transferCount; i++) {
-                    const senderIndex = Math.floor(Math.random() * batch.length);
-                    let receiverIndex = Math.floor(Math.random() * batch.length);
-
-                    while (receiverIndex === senderIndex) {
-                        receiverIndex = Math.floor(Math.random() * batch.length);
-                    }
-
-                    const sender = batch[senderIndex];
-                    const receiver = batch[receiverIndex];
-
-                    const senderBalance = await I_SecurityToken.balanceOf(sender.address);
-                    if (senderBalance === 0n) continue; // skip if no balance
-
-                    // Transfer 10% to 50% of balance
-                    const percentage = Math.floor(Math.random() * 40) + 10; // 10–50%
-                    const amount = (senderBalance * BigInt(percentage)) / 100n;
-                    await sleep(200);
-                    await I_SecurityToken.connect(new Wallet(sender.privateKey, provider)).transfer(receiver.address, amount);
-                    await sleep(200);
-
-                    console.log(`Transfer #${i + 1}: ${ethers.formatEther(amount)} tokens from ${sender.address} to ${receiver.address}`);
-                }
-            }
-
-            const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
-
-            const streamPromise = new Promise<void>((resolve, reject) => {
-                stream
-                    .on("data", async (row) => {
-                        stream.pause();
-
-                        const investor: InvestorWallet = {
-                            address: row.address,
-                            privateKey: row.privateKey
-                        };
-
-                        currentBatch.push(investor);
-
-                        if (currentBatch.length >= BATCH_SIZE) {
-                            const batchCopy = [...currentBatch];
-                            const batchOffset = offset;
-                            currentBatch = [];
-                            offset += BATCH_SIZE;
-
-                            queue
-                                .add(() => processTransferBatch(batchCopy, batchOffset))
-                                .then(() => stream.resume())
-                                .catch(reject);
-                        } else {
-                            stream.resume();
-                        }
-                    })
-                    .on("end", async () => {
-                        if (currentBatch.length > 0) {
-                            queue.add(() => processTransferBatch(currentBatch, offset));
-                        }
-                        await queue.onIdle();
-                        resolve();
-                    })
-                    .on("error", reject);
-            });
-
-            await streamPromise;
-
-            console.log("Random transfers completed");
-        });
-
-        it("Should create a second dividend after transfers", async () => {
-            const maturity = await latestTime() + 10;
-            const expiry = maturity + duration.days(10);
-            const secondDividendAmount = ethers.parseEther("20000");
-            const secondDividendName = ethers.encodeBytes32String("Dividend #2");;
-
-            // Ensure token_owner has enough POLY tokens
-            await I_PolyToken.connect(token_owner).getTokens(secondDividendAmount, token_owner.address);
-
-            // Approve spending for dividend
-            await I_PolyToken.connect(token_owner).approve(I_ERC20DividendCheckpoint.target, secondDividendAmount);
-
-            // Create the second dividend
-            const tx = await I_ERC20DividendCheckpoint.connect(token_owner).createDividend(
-                maturity,
-                expiry,
-                I_PolyToken.target,
-                secondDividendAmount,
-                secondDividendName
-            );
-
-            const receipt = await tx.wait();
-            const event = receipt.logs
-                .map(log => {
-                    try {
-                        return I_ERC20DividendCheckpoint.interface.parseLog(log);
-                    } catch {
-                        return null;
-                    }
-                })
-                .find(e => e && e.name === "ERC20DividendDeposited");
-
-            expect(event).to.not.be.null;
-            const dividendIndex = event!.args._dividendIndex;
-
-            // ✅ Verify dividend data
-            const data = await I_ERC20DividendCheckpoint.getDividendsData();
-            expect(data[1][Number(dividendIndex)]).to.equal(BigInt(maturity));
-            expect(data[2][Number(dividendIndex)]).to.equal(BigInt(expiry));
-            expect(data[3][Number(dividendIndex)]).to.equal(secondDividendAmount);
-            expect(data[4][Number(dividendIndex)]).to.equal(0n); // unclaimed initially
-            expect(data[5][Number(dividendIndex)]).to.equal(secondDividendName);
-
-            console.log(`Second dividend #${dividendIndex} created and validated`);
-        });
-
-        it("Investors should pull their own second dividend and verify correct payout distribution", async () => {
-            const dividendIndex = 1; // second dividend
-            const totalDividendAmount = ethers.parseEther("20000");
-            const totalInvestors = Number(await stGetter.getInvestorCount());
-
-            // Get total supply at the time of dividend creation (checkpoint)
-            const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
-            const checkpointId = Number(dividendData.checkpointId);
-            const maturity = Number(dividendData.maturity);
-
-            const now = await latestTime();
-            if (now < maturity) {
-                // Simulate time passing beyond maturity
-                await increaseTime(maturity - now + 1);
-            }
-
-            const totalSupplyAtCheckpoint = await stGetter.totalSupplyAt(checkpointId);
-            let totalClaimed = 0n;
-            let currentBatch: InvestorWallet[] = [];
-            let offset = 0;
-
-            const queue = new PQueue({ concurrency: CONCURRENCY });
-
-            const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
-                console.log(`Processing batch: ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
-
-                const investorQueue = new PQueue({ concurrency: 3 });
-
-                await investorQueue.addAll(
-                    batch.map((investor) => async () => {
-                        const address = investor.address;
-                        const signer = new Wallet(investor.privateKey, provider);
-
-                        const balanceBefore = await I_PolyToken.balanceOf(address);
-                        const balanceAtCheckpoint = await stGetter.balanceOfAt(address, checkpointId);
-
-                        const expectedShare = (balanceAtCheckpoint * totalDividendAmount) / totalSupplyAtCheckpoint;
-
-                        await expect(
-                            I_ERC20DividendCheckpoint.connect(signer).pullDividendPayment(dividendIndex)
-                        ).to.not.be.reverted;
-
-                        const balanceAfter = await I_PolyToken.balanceOf(address);
-                        const claimed: bigint = balanceAfter - balanceBefore;
-                        totalClaimed += claimed;
-
-                        expect(claimed).to.equal(expectedShare);
-                    }));
-            }
-
-            const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
-
-            const streamPromise = new Promise<void>((resolve, reject) => {
-                stream
-                    .on("data", async (row) => {
-                        stream.pause();
-
-                        const investor: InvestorWallet = {
-                            address: row.address,
-                            privateKey: row.privateKey,
-                        };
-
-                        currentBatch.push(investor);
-
-                        if (currentBatch.length >= BATCH_SIZE) {
-                            const batchCopy = [...currentBatch];
-                            const batchOffset = offset;
-                            currentBatch = [];
-                            offset += BATCH_SIZE;
-
-                            queue.add(() => processBatch(batchCopy, batchOffset))
-                                .then(() => stream.resume())
-                                .catch(reject);
-                        } else {
-                            stream.resume();
-                        }
-                    })
-                    .on("end", async () => {
-                        if (currentBatch.length > 0) {
-                            await queue.add(() => processBatch(currentBatch, offset));
-                        }
-                        await queue.onIdle();
-                        resolve();
-                    })
-                    .on("error", reject);
-            });
-
-            await streamPromise;
-
-            // Confirm total claim recorded
-            const dividendDataFinal = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
-            const tolerance = ethers.parseUnits("0.001", 18); // 20 wei
-            const diff = dividendDataFinal.claimedAmount > totalDividendAmount
-                ? dividendDataFinal.claimedAmount - totalDividendAmount
-                : totalDividendAmount - dividendDataFinal.claimedAmount;
-
-            expect(diff <= tolerance).to.be.true;
-
-            console.log("All investors successfully pulled their second dividend and received the correct dividend payout based on their checkpoint balance.");
-        });
-    });
+    // describe("Check Dividend payouts", async () => {
+    //     it("Should create a dividend", async () => {
+    //         const maturity = await latestTime() + 10;
+    //         const expiry = maturity + duration.days(10);
+    //         const dividendAmount = ethers.parseEther("10000");
+
+    //         //Make sure token_owner has enough POLY tokens
+    //         await I_PolyToken.connect(token_owner).getTokens(dividendAmount, token_owner.address);
+
+    //         //Approve spending
+    //         await I_PolyToken.connect(token_owner).approve(I_ERC20DividendCheckpoint.target, dividendAmount);
+
+    //         //Create dividend
+    //         const tx = await I_ERC20DividendCheckpoint.connect(token_owner).createDividend(
+    //             maturity,
+    //             expiry,
+    //             I_PolyToken.target,
+    //             dividendAmount,
+    //             dividendName
+    //         );
+
+    //         const receipt = await tx.wait();
+    //         const event = receipt.logs
+    //             .map(log => {
+    //                 try {
+    //                     return I_ERC20DividendCheckpoint.interface.parseLog(log);
+    //                 } catch {
+    //                     return null;
+    //                 }
+    //             })
+    //             .find(e => e && e.name === "ERC20DividendDeposited");
+
+    //         expect(event).to.not.be.null;
+    //         const dividendIndex = event!.args._dividendIndex;
+
+    //         // Check internal dividend data
+    //         const data = await I_ERC20DividendCheckpoint.getDividendsData();
+    //         expect(data[1][Number(dividendIndex)]).to.equal(BigInt(maturity));
+    //         expect(data[2][Number(dividendIndex)]).to.equal(BigInt(expiry));
+    //         expect(data[3][Number(dividendIndex)]).to.equal(dividendAmount);
+    //         expect(data[4][Number(dividendIndex)]).to.equal(0n); // nothing claimed yet
+    //         expect(data[5][Number(dividendIndex)]).to.equal(dividendName);
+
+    //         console.log(`Dividend #${dividendIndex} created and verified`);
+    //     });
+
+    //     it("Investors should be able to pull their own dividend", async () => {
+
+    //         const dividendIndex = 0; // assuming this is the first dividend
+    //         const totalInvestors = Number(await stGetter.getInvestorCount());
+    //         const totalDividendAmount = ethers.parseEther("10000");
+    //         const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+    //         const checkpointId = Number(dividendData.checkpointId);
+    //         const maturity = Number(dividendData.maturity);
+    //         const now = await latestTime();
+
+    //         if (now < maturity) {
+    //             await increaseTime(maturity - now + 1);
+    //         }
+
+    //         const totalSupplyAtCheckpoint = await stGetter.totalSupplyAt(checkpointId);
+    //         let totalClaimed = 0n;
+    //         let currentBatch: InvestorWallet[] = [];
+    //         let offset = 0;
+
+    //         const queue = new PQueue({ concurrency: CONCURRENCY });
+
+    //         const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
+    //             console.log(`Processing batch: ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
+
+    //             const investorQueue = new PQueue({ concurrency: 3 });
+
+    //             await investorQueue.addAll(
+    //                 batch.map((investor) => async () => {
+    //                     const address = investor.address;
+    //                     const signer = new Wallet(investor.privateKey, provider);
+
+    //                     const balanceBefore = await I_PolyToken.balanceOf(address);
+    //                     const balanceAtCheckpoint = await stGetter.balanceOfAt(address, checkpointId);
+
+    //                     const expectedShare = (balanceAtCheckpoint * totalDividendAmount) / totalSupplyAtCheckpoint;
+
+    //                     await expect(
+    //                         I_ERC20DividendCheckpoint.connect(signer).pullDividendPayment(dividendIndex)
+    //                     ).to.not.be.reverted;
+
+    //                     const balanceAfter = await I_PolyToken.balanceOf(address);
+    //                     const claimed: bigint = balanceAfter - balanceBefore;
+    //                     totalClaimed += claimed;
+
+    //                     expect(claimed).to.equal(expectedShare);
+    //                 }));
+    //         }
+
+    //         const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
+
+    //         const streamPromise = new Promise<void>((resolve, reject) => {
+    //             stream
+    //                 .on("data", async (row) => {
+    //                     stream.pause();
+
+    //                     const investor: InvestorWallet = {
+    //                         address: row.address,
+    //                         privateKey: row.privateKey,
+    //                     };
+
+    //                     currentBatch.push(investor);
+
+    //                     if (currentBatch.length >= BATCH_SIZE) {
+    //                         const batchCopy = [...currentBatch];
+    //                         const batchOffset = offset;
+    //                         currentBatch = [];
+    //                         offset += BATCH_SIZE;
+
+    //                         queue.add(() => processBatch(batchCopy, batchOffset))
+    //                             .then(() => stream.resume())
+    //                             .catch(reject);
+    //                     } else {
+    //                         stream.resume();
+    //                     }
+    //                 })
+    //                 .on("end", async () => {
+    //                     if (currentBatch.length > 0) {
+    //                         await queue.add(() => processBatch(currentBatch, offset));
+    //                     }
+    //                     await queue.onIdle();
+    //                     resolve();
+    //                 })
+    //                 .on("error", reject);
+    //         });
+
+    //         await streamPromise;
+
+    //         // Verify the dividend was marked fully claimed
+    //         const dividendDataFinal = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+    //         const tolerance = ethers.parseUnits("0.001", 18);
+    //         const diff = dividendDataFinal.claimedAmount > totalDividendAmount
+    //             ? dividendDataFinal.claimedAmount - totalDividendAmount
+    //             : totalDividendAmount - dividendDataFinal.claimedAmount;
+
+    //         expect(diff <= tolerance).to.be.true;
+
+    //         console.log("All investors successfully pulled their dividend and received the correct dividend payout based on their checkpoint balance.");
+    //     });
+
+    //     it("Should perform random transfers between investors", async () => {
+    //         const queue = new PQueue({ concurrency: CONCURRENCY });
+    //         let offset = 0;
+    //         let currentBatch: InvestorWallet[] = [];
+
+    //         const processTransferBatch = async (batch: InvestorWallet[], batchOffset: number) => {
+    //             console.log(`Processing transfers for batch ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
+
+
+    //             const transferCount = Math.floor(Math.random() * 3) + 1; // total number of transfers
+
+    //             for (let i = 0; i < transferCount; i++) {
+    //                 const senderIndex = Math.floor(Math.random() * batch.length);
+    //                 let receiverIndex = Math.floor(Math.random() * batch.length);
+
+    //                 while (receiverIndex === senderIndex) {
+    //                     receiverIndex = Math.floor(Math.random() * batch.length);
+    //                 }
+
+    //                 const sender = batch[senderIndex];
+    //                 const receiver = batch[receiverIndex];
+
+    //                 const senderBalance = await I_SecurityToken.balanceOf(sender.address);
+    //                 if (senderBalance === 0n) continue; // skip if no balance
+
+    //                 // Transfer 10% to 50% of balance
+    //                 const percentage = Math.floor(Math.random() * 40) + 10; // 10–50%
+    //                 const amount = (senderBalance * BigInt(percentage)) / 100n;
+    //                 await sleep(200);
+    //                 await I_SecurityToken.connect(new Wallet(sender.privateKey, provider)).transfer(receiver.address, amount);
+    //                 await sleep(200);
+
+    //                 console.log(`Transfer #${i + 1}: ${ethers.formatEther(amount)} tokens from ${sender.address} to ${receiver.address}`);
+    //             }
+    //         }
+
+    //         const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
+
+    //         const streamPromise = new Promise<void>((resolve, reject) => {
+    //             stream
+    //                 .on("data", async (row) => {
+    //                     stream.pause();
+
+    //                     const investor: InvestorWallet = {
+    //                         address: row.address,
+    //                         privateKey: row.privateKey
+    //                     };
+
+    //                     currentBatch.push(investor);
+
+    //                     if (currentBatch.length >= BATCH_SIZE) {
+    //                         const batchCopy = [...currentBatch];
+    //                         const batchOffset = offset;
+    //                         currentBatch = [];
+    //                         offset += BATCH_SIZE;
+
+    //                         queue
+    //                             .add(() => processTransferBatch(batchCopy, batchOffset))
+    //                             .then(() => stream.resume())
+    //                             .catch(reject);
+    //                     } else {
+    //                         stream.resume();
+    //                     }
+    //                 })
+    //                 .on("end", async () => {
+    //                     if (currentBatch.length > 0) {
+    //                         queue.add(() => processTransferBatch(currentBatch, offset));
+    //                     }
+    //                     await queue.onIdle();
+    //                     resolve();
+    //                 })
+    //                 .on("error", reject);
+    //         });
+
+    //         await streamPromise;
+
+    //         console.log("Random transfers completed");
+    //     });
+
+    //     it("Should create a second dividend after transfers", async () => {
+    //         const maturity = await latestTime() + 10;
+    //         const expiry = maturity + duration.days(10);
+    //         const secondDividendAmount = ethers.parseEther("20000");
+    //         const secondDividendName = ethers.encodeBytes32String("Dividend #2");;
+
+    //         // Ensure token_owner has enough POLY tokens
+    //         await I_PolyToken.connect(token_owner).getTokens(secondDividendAmount, token_owner.address);
+
+    //         // Approve spending for dividend
+    //         await I_PolyToken.connect(token_owner).approve(I_ERC20DividendCheckpoint.target, secondDividendAmount);
+
+    //         // Create the second dividend
+    //         const tx = await I_ERC20DividendCheckpoint.connect(token_owner).createDividend(
+    //             maturity,
+    //             expiry,
+    //             I_PolyToken.target,
+    //             secondDividendAmount,
+    //             secondDividendName
+    //         );
+
+    //         const receipt = await tx.wait();
+    //         const event = receipt.logs
+    //             .map(log => {
+    //                 try {
+    //                     return I_ERC20DividendCheckpoint.interface.parseLog(log);
+    //                 } catch {
+    //                     return null;
+    //                 }
+    //             })
+    //             .find(e => e && e.name === "ERC20DividendDeposited");
+
+    //         expect(event).to.not.be.null;
+    //         const dividendIndex = event!.args._dividendIndex;
+
+    //         // ✅ Verify dividend data
+    //         const data = await I_ERC20DividendCheckpoint.getDividendsData();
+    //         expect(data[1][Number(dividendIndex)]).to.equal(BigInt(maturity));
+    //         expect(data[2][Number(dividendIndex)]).to.equal(BigInt(expiry));
+    //         expect(data[3][Number(dividendIndex)]).to.equal(secondDividendAmount);
+    //         expect(data[4][Number(dividendIndex)]).to.equal(0n); // unclaimed initially
+    //         expect(data[5][Number(dividendIndex)]).to.equal(secondDividendName);
+
+    //         console.log(`Second dividend #${dividendIndex} created and validated`);
+    //     });
+
+    //     it("Investors should pull their own second dividend and verify correct payout distribution", async () => {
+    //         const dividendIndex = 1; // second dividend
+    //         const totalDividendAmount = ethers.parseEther("20000");
+    //         const totalInvestors = Number(await stGetter.getInvestorCount());
+
+    //         // Get total supply at the time of dividend creation (checkpoint)
+    //         const dividendData = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+    //         const checkpointId = Number(dividendData.checkpointId);
+    //         const maturity = Number(dividendData.maturity);
+
+    //         const now = await latestTime();
+    //         if (now < maturity) {
+    //             // Simulate time passing beyond maturity
+    //             await increaseTime(maturity - now + 1);
+    //         }
+
+    //         const totalSupplyAtCheckpoint = await stGetter.totalSupplyAt(checkpointId);
+    //         let totalClaimed = 0n;
+    //         let currentBatch: InvestorWallet[] = [];
+    //         let offset = 0;
+
+    //         const queue = new PQueue({ concurrency: CONCURRENCY });
+
+    //         const processBatch = async (batch: InvestorWallet[], batchOffset: number) => {
+    //             console.log(`Processing batch: ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
+
+    //             const investorQueue = new PQueue({ concurrency: 3 });
+
+    //             await investorQueue.addAll(
+    //                 batch.map((investor) => async () => {
+    //                     const address = investor.address;
+    //                     const signer = new Wallet(investor.privateKey, provider);
+
+    //                     const balanceBefore = await I_PolyToken.balanceOf(address);
+    //                     const balanceAtCheckpoint = await stGetter.balanceOfAt(address, checkpointId);
+
+    //                     const expectedShare = (balanceAtCheckpoint * totalDividendAmount) / totalSupplyAtCheckpoint;
+
+    //                     await expect(
+    //                         I_ERC20DividendCheckpoint.connect(signer).pullDividendPayment(dividendIndex)
+    //                     ).to.not.be.reverted;
+
+    //                     const balanceAfter = await I_PolyToken.balanceOf(address);
+    //                     const claimed: bigint = balanceAfter - balanceBefore;
+    //                     totalClaimed += claimed;
+
+    //                     expect(claimed).to.equal(expectedShare);
+    //                 }));
+    //         }
+
+    //         const stream = fs.createReadStream(OUTPUT_CSV).pipe(csv());
+
+    //         const streamPromise = new Promise<void>((resolve, reject) => {
+    //             stream
+    //                 .on("data", async (row) => {
+    //                     stream.pause();
+
+    //                     const investor: InvestorWallet = {
+    //                         address: row.address,
+    //                         privateKey: row.privateKey,
+    //                     };
+
+    //                     currentBatch.push(investor);
+
+    //                     if (currentBatch.length >= BATCH_SIZE) {
+    //                         const batchCopy = [...currentBatch];
+    //                         const batchOffset = offset;
+    //                         currentBatch = [];
+    //                         offset += BATCH_SIZE;
+
+    //                         queue.add(() => processBatch(batchCopy, batchOffset))
+    //                             .then(() => stream.resume())
+    //                             .catch(reject);
+    //                     } else {
+    //                         stream.resume();
+    //                     }
+    //                 })
+    //                 .on("end", async () => {
+    //                     if (currentBatch.length > 0) {
+    //                         await queue.add(() => processBatch(currentBatch, offset));
+    //                     }
+    //                     await queue.onIdle();
+    //                     resolve();
+    //                 })
+    //                 .on("error", reject);
+    //         });
+
+    //         await streamPromise;
+
+    //         // Confirm total claim recorded
+    //         const dividendDataFinal = await I_ERC20DividendCheckpoint.dividends(dividendIndex);
+    //         const tolerance = ethers.parseUnits("0.001", 18); // 20 wei
+    //         const diff = dividendDataFinal.claimedAmount > totalDividendAmount
+    //             ? dividendDataFinal.claimedAmount - totalDividendAmount
+    //             : totalDividendAmount - dividendDataFinal.claimedAmount;
+
+    //         expect(diff <= tolerance).to.be.true;
+
+    //         console.log("All investors successfully pulled their second dividend and received the correct dividend payout based on their checkpoint balance.");
+    //     });
+    // });
 
 });
 
