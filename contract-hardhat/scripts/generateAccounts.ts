@@ -4,9 +4,10 @@ import hre from "hardhat";
 import PQueue from "p-queue";
 
 const OUTPUT_FILE = "accounts.csv";
-const TOTAL = 500;
+const TOTAL = 10000;
 const BATCH_SIZE = 100;
 const FUND_AMOUNT = "0.01"; // ETH per account
+const expiry = Math.floor(Date.now() / 1000) + 2 * 365 * 24 * 60 * 60; //2 years from now
 
 const getRandomInvestorClass = () => Math.floor(Math.random() * 2);
 
@@ -16,7 +17,7 @@ async function main() {
 
   // Use write stream for better performance
   const stream = fs.createWriteStream(OUTPUT_FILE, { flags: "w" });
-  stream.write("index,address,privateKey,isAccredited,investorClass\n");
+  stream.write("index,address,privateKey,isAccredited,investorClass,expiry\n");
 
   for (let batchStart = 0; batchStart < TOTAL; batchStart += BATCH_SIZE) {
     const batch: string[] = [];
@@ -42,7 +43,7 @@ async function main() {
           await tx.wait();
 
           batch.push(
-            `${index},${wallet.address},${wallet.privateKey},${isAccredited},${investorClass}`
+            `${index},${wallet.address},${wallet.privateKey},${isAccredited},${investorClass},${expiry}`
           );
         });
       })
