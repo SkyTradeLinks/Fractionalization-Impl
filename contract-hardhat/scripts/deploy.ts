@@ -90,6 +90,18 @@ async function main() {
   
   await polymathRegistry.changeAddress("PolyToken", PolyToken)
 
+  // Set Permit2Contract in PolymathRegistry
+  await polymathRegistry.changeAddress("Permit2Contract", '0x000000000022D473030F116dDEE9F6B43aC78BA3');
+  console.log("Permit2Contract registered in PolymathRegistry");
+
+  // Set TradingRestrictionManager in PolymathRegistry
+  await polymathRegistry.changeAddress("TradingRestrictionManager", TradingRestrictionManagerContractAddress);
+  console.log("TradingRestrictionManager registered in PolymathRegistry");
+
+  // Grant operator role to the deployer for TradingRestrictionManager
+  await TradingRestrictionManager.grantOperator(OWNER_ADDRESS);
+  console.log("Operator role granted to deployer for TradingRestrictionManager");
+
   const TokenLib = await ethers.deployContract("TokenLib", deployer);
   await TokenLib.waitForDeployment();
   const TokenLibContractAddress = await TokenLib.getAddress();
@@ -181,7 +193,6 @@ async function main() {
 
   let tokenInitBytesCall = web3.eth.abi.encodeFunctionCall(tokenInitBytes, [STGetterContractAddress]);
   console.log({tokenInitBytesCall})
-  
 
 
   const STFactory = await ethers.deployContract("STFactory", [PolymathRegistryContractAddress, GeneralTransferManagerFactoryContractAddress, DataStoreFactoryContractAddress, "3.0.0", SecurityTokenLogicContractAddress, tokenInitBytesCall], deployer);
@@ -210,7 +221,6 @@ async function main() {
   await STRGetter.waitForDeployment();
   const STRGetterContractAddress = await STRGetter.getAddress();
   console.log({STRGetterContractAddress})
-
 
   const initRegFee = 0;
 
@@ -259,6 +269,23 @@ async function main() {
   await polymathRegistry.changeAddress("PolyUsdOracle", PolyMockOracleContractAddress);
   await polymathRegistry.changeAddress("EthUsdOracle", ETHOracleContractAddress);
   await polymathRegistry.changeAddress("StablePolyUsdOracle", StableOracleContractAddress);
+
+  const DummyERC20 = await ethers.deployContract("DummyERC20", ["Dai Token", "DAI", "18"], deployer);
+  await DummyERC20.waitForDeployment();
+  const DummyERC20ContractAddress = await DummyERC20.getAddress();
+
+  console.log({DummyERC20ContractAddress})
+  
+  console.log("\n=== Deployment Summary ===");
+  console.log("PolymathRegistry:", PolymathRegistryContractAddress);
+  console.log("TradingRestrictionManager:", TradingRestrictionManagerContractAddress);
+  console.log("ModuleRegistry:", ModuleRegistryProxyContractAddress);
+  console.log("SecurityTokenRegistry:", SecurityTokenRegistryProxyContractAddress);
+  console.log("STFactory:", STFactoryContractAddress);
+  console.log("USDTieredSTOFactory:", USDTieredSTOFactoryContractAddress);
+  console.log("FeatureRegistry:", FeatureRegistryContractAddress);
+  console.log("\nAll contracts deployed and configured successfully!");
+  console.log("\nTradingRestrictionManager is now registered in PolymathRegistry and ready for Merkle root operations.");
   
 }
 

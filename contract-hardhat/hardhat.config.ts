@@ -65,6 +65,18 @@ const config: HardhatUserConfig = {
       chainId: 56,
       timeout: 60 * 60 * 1000, // 1 hour
     },
+    polygonMainnet: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 137,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
+    mantleMainnet: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 5000,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
   },
   sourcify: {
     enabled: true,
