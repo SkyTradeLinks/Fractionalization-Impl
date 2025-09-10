@@ -23,7 +23,6 @@ contract USDTieredSTOFactory is UpgradableModuleFactory {
         bool _isCostInPoly
     )
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
-        Ownable(msg.sender)
     {
         name = "USDTieredSTO";
         title = "USD Tiered STO";
@@ -44,7 +43,7 @@ contract USDTieredSTOFactory is UpgradableModuleFactory {
      *  address Contract address of the Module
      */
     function deploy(bytes calldata _data) external returns(address) {
-        address usdTieredSTO = address(new USDTieredSTOProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.getAddress("PolyToken"), logicContracts[latestUpgrade].logicContract));
+        address usdTieredSTO = address(new USDTieredSTOProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.addressGetter("PolyToken"), logicContracts[latestUpgrade].logicContract));
         _initializeModule(usdTieredSTO, _data);
         return usdTieredSTO;
     }

@@ -23,7 +23,6 @@ contract GeneralTransferManagerFactory is UpgradableModuleFactory {
         bool _isCostInPoly
     )
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
-        Ownable(msg.sender)
     {
         name = "GeneralTransferManager";
         title = "General Transfer Manager";
@@ -46,7 +45,7 @@ contract GeneralTransferManagerFactory is UpgradableModuleFactory {
         external
         returns(address)
     {
-        address generalTransferManager = address(new GeneralTransferManagerProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.getAddress("PolyToken"), logicContracts[latestUpgrade].logicContract));
+        address generalTransferManager = address(new GeneralTransferManagerProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.addressGetter("PolyToken"), logicContracts[latestUpgrade].logicContract));
         _initializeModule(generalTransferManager, _data);
         return generalTransferManager;
     }

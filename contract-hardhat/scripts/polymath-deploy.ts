@@ -235,8 +235,6 @@ export async function initializeContracts() {
     
     // Assign SecurityTokenRegistry address
     await _contracts.polymathRegistry.changeAddress("SecurityTokenRegistry", _contracts.securityTokenRegistryProxy.target);
-    const addr = await _contracts.polymathRegistry.addressGetter("SecurityTokenRegistry");
-    console.log("SecurityTokenRegistry address:", addr, "expected:", _contracts.securityTokenRegistryProxy.target);
 
     const FakeUSDT = await ethers.getContractFactory("FakeUSDT");
     _contracts.fakeUSDTInstance = await FakeUSDT.deploy();

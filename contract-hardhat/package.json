@@ -4,7 +4,29 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "coverage": "NODE_OPTIONS=\"--max-old-space-size=8192\" npx hardhat coverage"
+    "coverage": "NODE_OPTIONS=\"--max-old-space-size=8192\" npx hardhat coverage",
+    "clean": "rimraf abi artifacts build cache generated lib/generated typechain-types",
+    "test": "hardhat typechain && hardhat test",
+    "compile": "hardhat compile",
+    "start:local": "hardhat node",
+    "contracts:deploy:localhost": "hardhat run ./scripts/deploy.ts  --network localhost",
+    "contracts:deploy:local": "hardhat run ./scripts/deploy.ts  --network local",
+    "contracts:deploy:hardhat": "hardhat run ./scripts/deploy.ts  --network hardhat",
+    "contracts:deploy:polygonMainnet": "hardhat run ./scripts/deploy.ts  --network polygonMainnet",
+    "contracts:deploy:mantleMainnet": "hardhat run ./scripts/deploy.ts  --network mantleMainnet",
+    "contracts:deploy:baseSepoliaTestnet": "hardhat run ./scripts/deploy.ts  --network baseSepoliaTestnet",
+    "contracts:deploy:monadTestnet": "hardhat run ./scripts/deploy.ts  --network monadTestnet",
+    "contracts:deploy:bnbMainnet": "hardhat run ./scripts/deploy.ts  --network bnbMainnet",
+    "contracts:verify:mantleMainnet": "hardhat run ./scripts/verify.ts --network mantleMainnet",
+    "contracts:verify:sourcify": "hardhat run ./scripts/verify-sourcify.ts --network mantleMainnet",
+    "start": "docker-compose up",
+    "stop": "docker-compose down",
+    "graph:codegen": "graph codegen ./subgraph/subgraph.yaml",
+    "graph:build": "graph build ./subgraph/subgraph.yaml",
+    "graph:remove:local": "graph remove local/local --node http://127.0.0.1:8020",
+    "graph:create:local": "graph create local/local --node http://127.0.0.1:8020",
+    "graph:deploy:local": "graph deploy local/local --ipfs http://localhost:5001 --node http://127.0.0.1:8020 --version-label 0.0.1 ./subgraph/subgraph.yaml",
+    "graph:all:local": "npm run graph:codegen && npm run graph:build && npm run graph:create:local && npm run graph:deploy:local"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
@@ -29,8 +51,11 @@
     "typescript": ">=4.5.0"
   },
   "dependencies": {
+    "@graphprotocol/graph-cli": "^0.69.1",
+    "@graphprotocol/graph-ts": "^0.38.1",
     "@openzeppelin/contracts": "^5.3.0",
     "@openzeppelin/merkle-tree": "^1.0.8",
-    "web3": "^4.16.0"
+    "dotenv": "^17.0.1",
+    "web3": "1.10.0"
   }
 }

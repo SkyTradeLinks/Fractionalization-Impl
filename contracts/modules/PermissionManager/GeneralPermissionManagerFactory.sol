@@ -23,7 +23,6 @@ contract GeneralPermissionManagerFactory is UpgradableModuleFactory {
         bool _isCostInPoly
     )
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
-        Ownable(msg.sender)
     {
         name = "GeneralPermissionManager";
         title = "General Permission Manager";
@@ -44,7 +43,7 @@ contract GeneralPermissionManagerFactory is UpgradableModuleFactory {
         external
         returns(address)
     {
-        address permissionManager = address(new GeneralPermissionManagerProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.getAddress("PolyToken"), logicContracts[latestUpgrade].logicContract));
+        address permissionManager = address(new GeneralPermissionManagerProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.addressGetter("PolyToken"), logicContracts[latestUpgrade].logicContract));
         _initializeModule(permissionManager, _data);
         return permissionManager;
     }

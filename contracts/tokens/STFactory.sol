@@ -7,7 +7,7 @@ import "../interfaces/ISTFactory.sol";
 import "../interfaces/ISecurityToken.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../interfaces/IOwnable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "../libraries/Ownable.sol";
 import "../interfaces/IModuleRegistry.sol";
 import "../interfaces/IPolymathRegistry.sol";
 import "../datastore/DataStoreFactory.sol";
@@ -46,7 +46,6 @@ contract STFactory is ISTFactory, Ownable {
         address _logicContract,
         bytes memory _initializationData
     )
-    Ownable(msg.sender)
     {
         require(_logicContract != address(0), "Invalid Address");
         require(_transferManagerFactory != address(0), "Invalid Address");
@@ -88,7 +87,7 @@ contract STFactory is ISTFactory, Ownable {
             _divisible
         );
         //NB When dataStore is generated, the security token address is automatically set via the constructor in DataStoreProxy.
-        if (address(dataStoreFactory) != address(0)) { // failing here - due to 'Not Owner'
+        if (address(dataStoreFactory) != address(0)) {
             ISecurityToken(securityToken).changeDataStore(dataStoreFactory.generateDataStore(securityToken));
         }
         ISecurityToken(securityToken).changeTreasuryWallet(_treasuryWallet);
@@ -100,10 +99,10 @@ contract STFactory is ISTFactory, Ownable {
     }
 
     function _deploy(
-        string calldata _name,
-        string calldata _symbol,
+        string memory _name,
+        string memory _symbol,
         uint8 _decimals,
-        string calldata _tokenDetails,
+        string memory _tokenDetails,
         bool _divisible
     ) internal returns(address) {
         // Creates proxy contract and sets some initial storage
@@ -182,7 +181,7 @@ contract STFactory is ISTFactory, Ownable {
         OwnedUpgradeabilityProxy(payable(address(uint160(msg.sender)))).upgradeToAndCall(logicContracts[newVersion].version, logicContracts[newVersion].logicContract, logicContracts[newVersion].upgradeData);
         tokenUpgrade[msg.sender] = newVersion;
         // Check that all modules remain valid
-        IModuleRegistry moduleRegistry = IModuleRegistry(polymathRegistry.getAddress("ModuleRegistry"));
+        IModuleRegistry moduleRegistry = IModuleRegistry(polymathRegistry.addressGetter("ModuleRegistry"));
         address moduleFactory;
         bool isArchived;
         for (uint8 i = 1; i < _maxModuleType; i++) {

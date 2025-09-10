@@ -1,6 +1,16 @@
 import { HardhatUserConfig } from "hardhat/config";
+import dotenv from "dotenv";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomicfoundation/hardhat-verify";
+
+
+const dotenvResult = dotenv.config();
+if (dotenvResult.error) {
+  throw dotenvResult.error;
+}
+
+const { PROVIDER_URL, OWNER_PRIVATE_KEY, ETHERSCAN_API_KEY } = process.env;
+const accounts = [...(OWNER_PRIVATE_KEY ? [OWNER_PRIVATE_KEY] : [])];
 
 const config: HardhatUserConfig = {
   mocha: {
@@ -26,13 +36,49 @@ const config: HardhatUserConfig = {
     ],
   },
   networks: {
-    monad: {
-      url: "https://monad-testnet.g.alchemy.com/v2/gdtMvd4B_EHr9MjU63dPbo0yvWqOQXE_",
-      accounts: ["PRIVATE_KEY"],
+    local: {
+      url: PROVIDER_URL,
+      chainId: 31337,
+    },
+    hardhat: {
+      chainId: 1337,
+    },
+    localhost: {
+      chainId: 1337,
+      url: "http://localhost:8545",
+    },
+    baseSepolia: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 84532,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
+    monadTestnet: {
+      url: PROVIDER_URL,
+      accounts,
       chainId: 10143,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
+    bnbMainnet: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 56,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
+    polygonMainnet: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 137,
+      timeout: 60 * 60 * 1000, // 1 hour
+    },
+    mantleMainnet: {
+      url: PROVIDER_URL,
+      accounts,
+      chainId: 5000,
+      timeout: 60 * 60 * 1000, // 1 hour
     },
   },
- sourcify: {
+  sourcify: {
     enabled: true,
     apiUrl: "https://sourcify-api-monad.blockvision.org",
     browserUrl: "https://testnet.monadexplorer.com"
@@ -41,5 +87,4 @@ const config: HardhatUserConfig = {
     enabled: false
   }
 };
-
 export default config;

@@ -10,14 +10,12 @@ import "./interfaces/IPolymathRegistry.sol";
 contract PolymathRegistry is ReclaimTokens, IPolymathRegistry {
     mapping(bytes32 => address) public storedAddresses;
 
-    constructor(address initialOwner) ReclaimTokens(initialOwner) {}
-
     /**
      * @notice Gets the contract address
      * @param _nameKey is the key for the contract address mapping
      *  address
      */
-    function getAddress(string calldata _nameKey) external view returns(address) {
+    function addressGetter(string calldata _nameKey) external view returns(address) {
         bytes32 key = keccak256(bytes(_nameKey));
         require(storedAddresses[key] != address(0), "Invalid key");
         return storedAddresses[key];

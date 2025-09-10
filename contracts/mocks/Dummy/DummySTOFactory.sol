@@ -23,7 +23,7 @@ contract DummySTOFactory is UpgradableModuleFactory {
         bool _isCostInPoly
     )
         UpgradableModuleFactory("3.0.0", _setupCost, _logicContract, _polymathRegistry, _isCostInPoly)
-        Ownable(msg.sender)
+        Ownable()
     {
         name = "DummySTO";
         title = "Dummy STO";
@@ -42,7 +42,7 @@ contract DummySTOFactory is UpgradableModuleFactory {
      * @return address Contract address of the Module
      */
     function deploy(bytes calldata _data) external returns(address) {
-        address dummySTO = address(new DummySTOProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.getAddress("PolyToken"), logicContracts[latestUpgrade].logicContract));
+        address dummySTO = address(new DummySTOProxy(logicContracts[latestUpgrade].version, msg.sender, polymathRegistry.addressGetter("PolyToken"), logicContracts[latestUpgrade].logicContract));
         _initializeModule(dummySTO, _data);
         return dummySTO;
     }
