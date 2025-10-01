@@ -9,6 +9,11 @@ import { deployERC20DividendAndVerifyed, deployGPMAndVerifyed, deployUSDTieredST
 import { initializeContracts } from "../scripts/polymath-deploy";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
+import {
+  PERMIT2_ADDRESS,
+  SignatureTransfer,
+  PermitTransferFrom,
+} from "@uniswap/permit2-sdk";
 
 const functionSignature = {
         name: "configure",
@@ -219,6 +224,7 @@ describe("Trading restriction Manager", function() {
     // MockOracle USD prices
     let USDETH: bigint; // 500 USD/ETH
     let USDPOLY: bigint; // 0.25 USD/POLY
+    let mockPermit2: any;
 
     const DividendParameters = ["address"];
     const checkpointKey = 4;
@@ -249,6 +255,42 @@ describe("Trading restriction Manager", function() {
             if (_currencyTo == "TOKEN") return (ethToUSD / USDTOKEN) * e18; // USD / USD/TOKEN = TOKEN
         }
         return 0n;
+    }
+
+    async function generatePermit2Data(
+        tokenAddress: string,
+        amountInWei: string,
+        spenderAddress: string,
+        signer: any,
+        chainId: number
+    ): Promise<{ permit: PermitTransferFrom; permitSignature: string }> {
+        const currentTime = Math.floor(Date.now() / 1000);
+        const deadline = currentTime + 3600;
+        const nonce = Math.floor(Math.random() * 1e15);
+
+        const permit: PermitTransferFrom = {
+        permitted: {
+            token: tokenAddress,
+            amount: amountInWei,
+        },
+        spender: spenderAddress,
+        nonce,
+        deadline,
+        };
+
+        const { domain, types, values } = SignatureTransfer.getPermitData(
+        permit,
+        PERMIT2_ADDRESS,
+        chainId
+        );
+
+        // ethers v6 signTypedData
+        const signature = await signer.signTypedData(domain, types, values);
+
+        return {
+        permit,
+        permitSignature: signature,
+        };
     }
 
     before(async () => {
@@ -306,6 +348,8 @@ describe("Trading restriction Manager", function() {
 
         GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
         PolyTokenFaucetFactory = await ethers.getContractFactory("PolyTokenFaucet");
+        const MockPermit2 = await ethers.getContractFactory("MockPermit2");
+        mockPermit2 = await MockPermit2.deploy();
 
 
         // Step 1: Deploy the general PM ecosystem
@@ -678,8 +722,34 @@ describe("Trading restriction Manager", function() {
             const init_WalletPOLYBal = await I_PolyToken.balanceOf(account_issuer.address);
             const init_WalletDAIBal = await I_DaiToken.balanceOf(account_issuer.address);
 
+            const requiredAmount = ethers.parseEther("10");
+
+            const { permit, permitSignature } = await generatePermit2Data(
+            stoAddress,
+            requiredAmount.toString(),
+            token_owner.address,
+            account_investor1.address,
+            31337
+            );
+
+            expect(permit.permitted.token).to.eq(stoAddress);
+            expect(permit.permitted.amount).to.eq(requiredAmount.toString());
+            expect(permit.spender).to.eq(token_owner.address);
+            expect(permitSignature).to.be.properHexString;
+
             // Buy With DAI
-            const tx2 = await I_USDTieredSTO_Array[stoId].connect(account_investor1).buyWithUSD(account_investor1.address, investment_DAI, daiAddress, proof1, ltime, isAccredited1, InvestorClass.NonUS);
+            const tx2 = await I_USDTieredSTO_Array[stoId].connect(account_investor1).buyWithUSD(
+                null,
+                await mockPermit2.getAddress(),
+                account_investor1.address, 
+                requiredAmount,
+                investment_DAI, 
+                daiAddress, 
+                proof1, 
+                ltime, 
+                isAccredited1, 
+                InvestorClass.NonUS
+            );
             const receipt2 = await tx2.wait();
             const gasCost2 = receipt2.gasUsed * receipt2.gasPrice;
             console.log(`Gas buyWithUSD: ${receipt2.gasUsed}`);
