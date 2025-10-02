@@ -51,12 +51,6 @@ const config: HardhatUserConfig = {
       chainId: 31337,
     },
     hardhat: {
-      // This is the crucial part
-      forking: {
-        url: "", // Your RPC URL
-        // Optional: pin the block number for consistent tests
-        blockNumber: 19000000
-      },
       chainId: 1337, // Keep the local chainId
     },
     localhost: {

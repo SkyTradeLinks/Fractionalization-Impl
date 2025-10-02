@@ -142,6 +142,7 @@ describe("Trading restriction Manager", function() {
     let I_Permit2: any;
     let I_DaiToken: any;
     let PolyTokenFaucetFactory: any;
+    let Permit2Factory: any;
     let I_USDTieredSTOFactory: any;
     let P_USDTieredSTOFactory: any;
     let I_ERC20DividendCheckpointFactory: any;
@@ -342,6 +343,9 @@ describe("Trading restriction Manager", function() {
 
         GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
         PolyTokenFaucetFactory = await ethers.getContractFactory("PolyTokenFaucet");
+        Permit2Factory = await ethers.getContractFactory("Permit2");
+        I_Permit2 = await Permit2Factory.connect(account_polymath).deploy();
+        await I_Permit2.waitForDeployment();
 
 
         // Step 1: Deploy the general PM ecosystem
@@ -616,9 +620,11 @@ describe("Trading restriction Manager", function() {
         // });
 
         it("should set permit2", async () => {
-            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
+            const permit2Address = await I_Permit2.getAddress();
+            console.log(permit2Address, "permit2Address");
+            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", permit2Address);
             await I_PolymathRegistry.connect(account_polymath).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
-            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
+            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(permit2Address);
             expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
         });
 
@@ -757,7 +763,8 @@ describe("Trading restriction Manager", function() {
             await I_DaiToken.getTokens(investment_DAI, account_investor1.address);
             // await I_DaiToken.connect(account_investor1).approve(stoAddress, investment_DAI);
 
-            await I_DaiToken.connect(account_investor1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            const permit2Address = await I_Permit2.getAddress();
+            await I_DaiToken.connect(account_investor1).approve(permit2Address, ethers.MaxUint256);
 
             const { permit, permitSignature } = await generatePermit2Data(
                 daiAddress,
