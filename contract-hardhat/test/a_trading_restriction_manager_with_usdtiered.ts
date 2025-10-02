@@ -228,44 +228,6 @@ describe("Trading restriction Manager", function() {
     const DividendParameters = ["address"];
     const checkpointKey = 4;
 
-    function getEIP712Hash(
-        permit: PermitTransferFrom,
-        spenderAddress: string,
-        chainId: number,
-        permit2Address: string
-        ): string {
-        const domain: TypedDataDomain = {
-            name: "Permit2",
-            chainId: chainId,
-            verifyingContract: permit2Address,
-        };
-
-        const types: Record<string, TypedDataField[]> = {
-            PermitTransferFrom: [
-            { name: "permitted", type: "TokenPermissions" },
-            { name: "spender", type: "address" },
-            { name: "nonce", type: "uint256" },
-            { name: "deadline", type: "uint256" },
-            ],
-            TokenPermissions: [
-            { name: "token", type: "address" },
-            { name: "amount", type: "uint256" },
-            ],
-        };
-
-        const values = {
-            permitted: {
-            token: permit.permitted.token,
-            amount: permit.permitted.amount,
-            },
-            spender: spenderAddress,
-            nonce: permit.nonce,
-            deadline: permit.deadline,
-        };
-
-        return ethers.TypedDataEncoder.hash(domain, types, values);
-        }
-
     async function convert(_stoID: number, _tier: number, _discount: boolean, _currencyFrom: string, _currencyTo: string, _amount: bigint): Promise<bigint> {
         let USDTOKEN: bigint;
         if (_discount) USDTOKEN = (await I_USDTieredSTO_Array[_stoID].tiers(_tier))[1];
@@ -348,9 +310,9 @@ describe("Trading restriction Manager", function() {
 
         const values = [
             [account_investor1.address, ltime, isAccredited1, InvestorClass.NonUS],
-            [account_investor2.address, ltime, isAccredited2, InvestorClass.US],
-            [account_investor3.address, ltime, isAccredited1, InvestorClass.US],
-            [account_investor4.address, ltime, isAccredited2, InvestorClass.NonUS]
+            [account_investor2.address, ltime, isAccredited2, InvestorClass.NonUS],
+            [account_investor3.address, ltime, isAccredited2, InvestorClass.US],
+            [account_investor4.address, ltime, isAccredited1, InvestorClass.US]
         ];
 
         merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool", "uint64"]);
@@ -740,41 +702,41 @@ describe("Trading restriction Manager", function() {
         //     ).to.not.be.reverted;
         // });
 
-        // it("Should verify investor 2 correctly", async () => {
-        //     await expect(
-        //         I_TradingRestrictionManager.connect(account_investor2).verifyInvestor(
-        //         proof2,
-        //         account_investor2.address,
-        //         ltime,
-        //         isAccredited2,
-        //         InvestorClass.NonUS
-        //     )
-        //     ).to.not.be.reverted;
-        // });
+        it("Should verify investor 2 correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                proof2,
+                account_investor2.address,
+                ltime,
+                isAccredited2,
+                InvestorClass.NonUS
+            )
+            ).to.not.be.reverted;
+        });
 
-        // it("Should verify investor 3 correctly", async () => {
-        //     await expect(
-        //         I_TradingRestrictionManager.connect(account_investor3).verifyInvestor(
-        //         proof3,
-        //         account_investor3.address,
-        //         ltime,
-        //         isAccredited2,
-        //         InvestorClass.US
-        //     )
-        //     ).to.not.be.reverted;
-        // });
+        it("Should verify investor 3 correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(account_investor3).verifyInvestor(
+                proof3,
+                account_investor3.address,
+                ltime,
+                isAccredited2,
+                InvestorClass.US
+            )
+            ).to.not.be.reverted;
+        });
 
-        // it("Should verify investor 4 correctly", async () => {
-        //     await expect(
-        //         I_TradingRestrictionManager.connect(account_investor4).verifyInvestor(
-        //         proof4,
-        //         account_investor4.address,
-        //         ltime,
-        //         false,
-        //         InvestorClass.US
-        //     )
-        //     ).to.not.be.reverted;
-        // });
+        it("Should verify investor 4 correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(account_investor4).verifyInvestor(
+                proof4,
+                account_investor4.address,
+                ltime,
+                isAccredited1,
+                InvestorClass.US
+            )
+            ).to.not.be.reverted;
+        });
 
         it("should successfully buy using buyWithUSD at tier 0 for NONACCREDITED account_investor1", async () => {
             const stoId = 0;
@@ -834,7 +796,7 @@ describe("Trading restriction Manager", function() {
 
             // Buy With DAI
             const tx2 = await I_USDTieredSTO_Array[stoId].connect(account_investor1).buyWithUSD(
-                account_investor1.address, 
+                account_investor1.address,
                 investment_DAI, 
                 daiAddress, 
                 proof1,
@@ -913,15 +875,15 @@ describe("Trading restriction Manager", function() {
             expect(dividendDepositedEvent!.args._checkpointId).to.equal(1n);
         });
 
-        // it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
-        //     const investor1Balance = await I_PolyToken.balanceOf(account_investor1.address);
-        //     await I_ERC20DividendCheckpoint.connect(token_owner).pushDividendPayment(0, 0n, 10);
-        //     const investor1BalanceAfter = await I_PolyToken.balanceOf(account_investor1.address);
-        //     expect(investor1BalanceAfter - investor1Balance).to.equal(ethers.parseEther("1.5"));
+        it("Issuer pushes dividends iterating over account holders - dividends proportional to checkpoint", async () => {
+            const investor1Balance = await I_PolyToken.balanceOf(account_investor1.address);
+            await I_ERC20DividendCheckpoint.connect(token_owner).pushDividendPayment(0, 0n, 10);
+            const investor1BalanceAfter = await I_PolyToken.balanceOf(account_investor1.address);
+            expect(investor1BalanceAfter - investor1Balance).to.equal(ethers.parseEther("1.5"));
 
-        //     const dividendData = await I_ERC20DividendCheckpoint.dividends(0);
-        //     expect(dividendData.claimedAmount).to.equal(ethers.parseEther("1.5"));
-        // });
+            const dividendData = await I_ERC20DividendCheckpoint.dividends(0);
+            expect(dividendData.claimedAmount).to.equal(ethers.parseEther("1.5"));
+        });
 
         it("distribute initial tokens to investors", async () => {
             const amount = ethers.parseEther("100");
