@@ -17,6 +17,7 @@ import {
     MockOracle,
     ModuleRegistry,
     ModuleRegistryProxy,
+    Permit2,
     PolyTokenFaucet,
     PolymathRegistry,
     STFactory,
@@ -62,6 +63,7 @@ let I_STGetter: any;
 let I_USDOracle: any;
 let I_POLYOracle: any;
 let I_TradingRestrictionManager: any;
+let I_Permit2: any;
 
 // Initial fee for ticker registry and security token registry
 const initRegFee = ethers.parseEther("250");
@@ -100,6 +102,9 @@ async function setUpPolymathNetwork(account_polymath: string, token_owner: strin
     // STEP 11: External (add TradingRestriction Manager)
     await deployTradingRestrictionManager(account_polymath, token_owner);
 
+    // STEP 12: Deploy Permit2
+    await deployPermit2(account_polymath, token_owner);
+
     const tempArray = [
         I_PolymathRegistry,
         I_PolyToken,
@@ -117,6 +122,7 @@ async function setUpPolymathNetwork(account_polymath: string, token_owner: strin
         I_TradingRestrictionManager,
         I_USDOracle,
         I_POLYOracle,
+        I_Permit2,
     ];
     return Promise.all(tempArray);
 }
@@ -142,6 +148,13 @@ async function deployTradingRestrictionManager(account_polymath: string, token_o
     I_TradingRestrictionManager = await TradingRestrictionManager.deploy();
 
     return [I_TradingRestrictionManager];
+}
+
+async function deployPermit2(account_polymath: string, token_owner: string): Promise<[Permit2]> {
+    const Permit2 = await ethers.getContractFactory("Permit2");
+    I_Permit2 = await Permit2.deploy();
+
+    return [I_Permit2];
 }
 
 async function deployPolyRegistryAndPolyToken(account_polymath: string, token_owner: string): Promise<[PolymathRegistry, PolyTokenFaucet]> {

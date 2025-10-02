@@ -30,8 +30,12 @@ async function main() {
   await PolymathRegistry.waitForDeployment();
   // @ts-ignore
   const PolymathRegistryContractAddress = await PolymathRegistry.getAddress();
-
   console.log({ PolymathRegistryContractAddress })
+
+  const Permit2 = await ethers.deployContract("Permit2", deployer);
+  await Permit2.waitForDeployment();
+  const permit2ContractAddress = await Permit2.getAddress();
+  console.log({ permit2ContractAddress }, "permit2ContractAddress");
 
   const ModuleRegistry = await ethers.deployContract("ModuleRegistry", deployer);
   await ModuleRegistry.waitForDeployment();
@@ -91,8 +95,8 @@ async function main() {
   await polymathRegistry.changeAddress("PolyToken", PolyToken)
 
   // Set Permit2Contract in PolymathRegistry
-  await polymathRegistry.changeAddress("Permit2Contract", '0x000000000022D473030F116dDEE9F6B43aC78BA3');
-  console.log("Permit2Contract registered in PolymathRegistry");
+  await polymathRegistry.changeAddress("Permit2Contract", permit2ContractAddress);
+  console.log("Permit2Contract registered in PolymathRegistry with address:", permit2ContractAddress);
 
   // Set TradingRestrictionManager in PolymathRegistry
   await polymathRegistry.changeAddress("TradingRestrictionManager", TradingRestrictionManagerContractAddress);
