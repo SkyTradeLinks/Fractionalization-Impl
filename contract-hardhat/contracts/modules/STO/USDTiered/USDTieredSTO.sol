@@ -340,7 +340,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
      * @notice Function to set allowBeneficialInvestments (allow beneficiary to be different to funder)
      * @param _allowBeneficialInvestments Boolean to allow or disallow beneficial investments
      */
-    function changeAllowBeneficialInvestments(bool _allowBeneficialInvestments) external withPerm(OPERATOR) {
+    function changeAllowBeneficialInvestments(bool _allowBeneficialInvestments) external {
         require(_allowBeneficialInvestments != allowBeneficialInvestments);
         allowBeneficialInvestments = _allowBeneficialInvestments;
         emit SetAllowBeneficialInvestments(allowBeneficialInvestments);
@@ -494,12 +494,6 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
         require(_deadline > block.timestamp, "Invalid permit deadline");
         require(_permitSignature.length > 0, "Permit signature required");
 
-        console.log("--- Permit2 Call Parameters ---");
-        console.log("P2 Param - Token:", address(_usdToken));
-        console.log("P2 Param - Amount (spentValue):", spentValue);
-        console.log("P2 Param - Nonce:", _nonce);
-        console.log("P2 Param - Deadline:", _deadline);
-        console.logBytes(_permitSignature);
         // Execute Permit2 transfer - transfer directly to wallet (not to this contract first)
         IPermit2(permit2Contract).permitTransferFrom(
             // The permit message. Spender is inferred as the caller (this contract)

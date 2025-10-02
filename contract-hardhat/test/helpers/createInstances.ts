@@ -103,7 +103,7 @@ async function setUpPolymathNetwork(account_polymath: string, token_owner: strin
     await deployTradingRestrictionManager(account_polymath, token_owner);
 
     // STEP 12: Deploy Permit2
-    await deployPermit2(account_polymath, token_owner);
+    // await deployPermit2(account_polymath, token_owner);
 
     const tempArray = [
         I_PolymathRegistry,
@@ -122,7 +122,7 @@ async function setUpPolymathNetwork(account_polymath: string, token_owner: strin
         I_TradingRestrictionManager,
         I_USDOracle,
         I_POLYOracle,
-        I_Permit2,
+        // I_Permit2,
     ];
     return Promise.all(tempArray);
 }

@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import {
   SignatureTransfer, // Useful for generating permit data for signature style approvals
   PermitTransferFrom,
+  PERMIT2_ADDRESS
 } from "@uniswap/permit2-sdk";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -14,8 +15,7 @@ export const generatePermit2Data = async (
   amountInWei: string,
   spender: string,
   signer: ethers.JsonRpcSigner | HardhatEthersSigner,
-  chainId: number,
-  I_Permit2Address: string
+  chainId: number
 ): Promise<{
   permit: PermitTransferFrom;
   permitSignature: string;
@@ -37,7 +37,7 @@ export const generatePermit2Data = async (
   // Generate the permit return data & sign it
   const { domain, types, values } = SignatureTransfer.getPermitData(
     permit,
-    I_Permit2Address,
+    PERMIT2_ADDRESS,
     chainId
   );
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment

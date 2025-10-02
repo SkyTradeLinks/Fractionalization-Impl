@@ -96,7 +96,7 @@ import {
 } from "../typechain-types";
 import { encodeModuleCall } from "./helpers/encodeCall";
 import { generatePermit2Data } from "./helpers/permit2Utils";
-import { PermitTransferFrom } from "@uniswap/permit2-sdk";
+import { PERMIT2_ADDRESS, PermitTransferFrom } from "@uniswap/permit2-sdk";
 
 describe("Trading restriction Manager", function() {
     // Accounts Variable declaration
@@ -400,7 +400,6 @@ describe("Trading restriction Manager", function() {
             I_STRGetter,
             I_STGetter,
             I_TradingRestrictionManager,
-            I_Permit2
         ] = instances;
 
         I_DaiToken = await PolyTokenFaucetFactory.connect(account_polymath).deploy();
@@ -655,9 +654,9 @@ describe("Trading restriction Manager", function() {
         // });
 
         it("should set permit2", async () => {
-            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", I_Permit2.target);
+            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
             await I_PolymathRegistry.connect(account_polymath).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
-            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(I_Permit2.target);
+            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
             expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
         });
 
@@ -667,6 +666,36 @@ describe("Trading restriction Manager", function() {
         });
 
         it("should whitelist three investors", async () => {
+            const endTime = BigInt(ltime) + BigInt(duration.days(30));
+
+            const nonUSLockPeriod = ltime + (duration.days(15));
+            const usLockPeriod = ltime + (duration.days(15));
+
+            const SecurityTokenAddress = await I_SecurityToken.target;
+            const tx1 = await I_TradingRestrictionManager.setTradingRestrictionPeriod(SecurityTokenAddress, 0, 0, endTime);
+            const receipt1 = await tx1.wait();
+
+            let eventUpdate: LogDescription | null = null;
+
+            for (const log of receipt1!.logs) {
+                try {
+                    const parsed = I_TradingRestrictionManager.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "TradingRestrictionSet") {
+                        eventUpdate = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(eventUpdate).to.not.be.null;
+            expect(eventUpdate!.args.token).to.equal(SecurityTokenAddress, "Token address not set correctly");
+            expect(eventUpdate!.args.nonUS).to.equal(0, "non us lock not set correctly");
+            expect(eventUpdate!.args.us).to.equal(0, "US lock period not set correctly");
+            expect(eventUpdate!.args.lockStart).to.equal(endTime, "End time not set correctly");
+
             const tx = await I_TradingRestrictionManager.connect(token_owner).updateMerkleRootWithSignature(
                 merkleRoot,
                 expiryTime,
@@ -748,9 +777,11 @@ describe("Trading restriction Manager", function() {
         // });
 
         it("should successfully buy using buyWithUSD at tier 0 for NONACCREDITED account_investor1", async () => {
-            await ethers.provider.send("evm_increaseTime", [duration.days(1)]);
             const stoId = 0;
             const tierId = 0;
+            await I_USDTieredSTO_Array[stoId].connect(account_polymath).changeAllowBeneficialInvestments(true);
+
+            await ethers.provider.send("evm_increaseTime", [duration.days(1)]);
 
             const investment_Token = 50n * e18;
             const investment_DAI = await convert(stoId, tierId, false, "TOKEN", "USD", investment_Token);
@@ -764,24 +795,15 @@ describe("Trading restriction Manager", function() {
             await I_DaiToken.getTokens(investment_DAI, account_investor1.address);
             // await I_DaiToken.connect(account_investor1).approve(stoAddress, investment_DAI);
 
-            await I_DaiToken.connect(account_investor1).approve(I_Permit2.target, ethers.MaxUint256);
+            await I_DaiToken.connect(account_investor1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
 
             const { permit, permitSignature } = await generatePermit2Data(
                 daiAddress,
                 investment_DAI.toString(),
                 stoAddress, // The STO contract is the spender that Permit2 will give tokens to
                 account_investor1, // The investor is the signer
-                Number(chainId),
-                I_Permit2.target
+                Number(chainId)
             );
-
-            const offchainHash = getEIP712Hash(
-                permit,
-                stoAddress, // The spender
-                Number(chainId),
-                I_Permit2.target
-            );
-            console.log("Off-Chain EIP-712 Hash:", offchainHash);
 
             const init_TokenSupply = await I_SecurityToken.totalSupply();
             const init_InvestorTokenBal = await I_SecurityToken.balanceOf(account_investor1.address);
@@ -801,7 +823,7 @@ describe("Trading restriction Manager", function() {
             console.log("--- Off-Chain Data Used For Signature ---");
             console.log("Signer (owner):", account_investor1.address.toLowerCase());
             console.log("Spender (STO contract):", stoAddress.toLowerCase());
-            console.log("Permit2 Contract for Domain:", I_Permit2.target.toLowerCase());
+            console.log("Permit2 Contract for Domain:", PERMIT2_ADDRESS.toLowerCase());
             console.log("Chain ID:", Number(chainId));
             console.log("P2 Param - Token:", permit.permitted.token.toLowerCase());
             console.log("P2 Param - Amount (spentValue):", permit.permitted.amount.toString());

@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import "./ITradingRestrictionManager.sol";
 import "../../libraries/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "hardhat/console.sol";
 
 contract TradingRestrictionManager is ITradingRestrictionManager, Ownable {
     bytes32 private _root;
