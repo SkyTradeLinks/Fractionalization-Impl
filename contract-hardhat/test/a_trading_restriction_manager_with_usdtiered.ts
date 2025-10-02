@@ -94,7 +94,7 @@ import {
     USDTieredSTO,
     USDTieredSTOFactory,
 } from "../typechain-types";
-import { encodeModuleCall } from "./helpers/encodeCall";
+import { encodeModuleCall, generateMerkleRootSignature } from "./helpers/encodeCall";
 import { generatePermit2Data } from "./helpers/permit2Utils";
 import { PERMIT2_ADDRESS, PermitTransferFrom } from "@uniswap/permit2-sdk";
 
@@ -254,31 +254,6 @@ describe("Trading restriction Manager", function() {
             if (_currencyTo == "TOKEN") return (ethToUSD / USDTOKEN) * e18; // USD / USD/TOKEN = TOKEN
         }
         return 0n;
-    }
-
-    /**
-     * @notice Generates a signature for updating the Merkle root
-     * @param signer The signer account (should be an operator)
-     * @param merkleRoot The Merkle root hash
-     * @param expiryTime The expiry timestamp
-     * @returns The signature bytes
-     */
-    async function generateMerkleRootSignature(
-        signer: any,
-        merkleRoot: string,
-        expiryTime: number | bigint
-    ): Promise<string> {
-        // Create the message hash (same as in the smart contract)
-        const messageHash = ethers.solidityPackedKeccak256(
-            ["bytes32", "uint64"],
-            [merkleRoot, expiryTime]
-        );
-        
-        // Sign the message hash
-        // This automatically adds the Ethereum Signed Message prefix
-        const signature = await signer.signMessage(ethers.getBytes(messageHash));
-        
-        return signature;
     }
 
     before(async () => {
