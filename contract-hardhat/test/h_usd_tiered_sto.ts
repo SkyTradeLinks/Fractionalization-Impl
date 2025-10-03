@@ -19,8 +19,8 @@ import {
     STGetter,
 } from "../typechain-types";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
-import { PERMIT2_ADDRESS } from "@uniswap/permit2-sdk";
 import { generatePermit2Data } from "./helpers/permit2Utils";
+import { ContractFactory } from "ethers";
 
 describe("USDTieredSTO", function() {
     let e18: bigint;
@@ -58,6 +58,7 @@ describe("USDTieredSTO", function() {
     let ltime;
     let isAccredited1;
     let isAccredited2;
+    let PERMIT2_FOR_RUNTIME: string;
 
     // Helper to increase blockchain time
     const ONE_DAY_IN_SECONDS = 24 * 60 * 60;
@@ -332,6 +333,14 @@ describe("USDTieredSTO", function() {
         await I_PolymathRegistry.connect(POLYMATH).changeAddress("EthUsdOracle", await I_USDOracle.getAddress());
         await I_PolymathRegistry.connect(POLYMATH).changeAddress("PolyUsdOracle", await I_POLYOracle.getAddress());
 
+        // Deploy and register MockPermit2 for local tests
+        const MockPermit2: ContractFactory = await ethers.getContractFactory("MockPermit2");
+        const mockPermit2 = await MockPermit2.connect(POLYMATH).deploy();
+        await mockPermit2.waitForDeployment();
+        PERMIT2_FOR_RUNTIME = await mockPermit2.getAddress();
+        await I_PolymathRegistry.connect(POLYMATH).changeAddress("Permit2Contract", PERMIT2_FOR_RUNTIME);
+        expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_FOR_RUNTIME);
+
         // Printing all the contract addresses
         console.log(`
         --------------------- Polymath Network Smart Contracts: ---------------------
@@ -350,7 +359,6 @@ describe("USDTieredSTO", function() {
         -----------------------------------------------------------------------------
         `);
     });
-
     describe("Generate the SecurityToken", async () => {
         it("Should register the ticker before the generation of the security token", async () => {
             await I_PolyToken.getTokens(REGFEE, ISSUER.address);
@@ -463,9 +471,9 @@ describe("USDTieredSTO", function() {
         // });
 
         it("should set permit2", async () => {
-            await I_PolymathRegistry.connect(POLYMATH).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
+            await I_PolymathRegistry.connect(POLYMATH).changeAddress("Permit2Contract", PERMIT2_FOR_RUNTIME);
             await I_PolymathRegistry.connect(POLYMATH).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
-            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
+            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_FOR_RUNTIME);
             expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
         });
 
@@ -656,7 +664,9 @@ describe("USDTieredSTO", function() {
 
         it("Should allow non-matching beneficiary", async () => {
             snapId = await takeSnapshot();
-            await I_USDTieredSTO_Array[0].connect(ISSUER).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[0].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[0].connect(ISSUER).changeAllowBeneficialInvestments(true);
+            }
             const allow = await I_USDTieredSTO_Array[0].allowBeneficialInvestments();
             expect(allow).to.be.true;
         });
@@ -799,7 +809,6 @@ describe("USDTieredSTO", function() {
             
             I_USDTieredSTO_Array.push(await ethers.getContractAt("USDTieredSTO", moduleAddedEvent.args._module));
         });
-
         it("Should successfully attach the fourth STO module to the security token", async () => {
             const stoId = 3;
 
@@ -1272,7 +1281,6 @@ describe("USDTieredSTO", function() {
             await revertToSnapshot(snapId);
         });
         });
-
     describe("Test buying failure conditions", async () => {
         it("should fail if before STO start time", async () => {
             const stoId = 0;
@@ -1302,7 +1310,9 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.getTokens(investment_DAI, ACCREDITED1.address);
             await I_DaiToken.connect(ACCREDITED1).approve(await I_USDTieredSTO_Array[stoId].getAddress(), investment_DAI);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
@@ -1442,7 +1452,9 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.getTokens(investment_DAI, ACCREDITED1.address);
             await I_DaiToken.connect(ACCREDITED1).approve(await I_USDTieredSTO_Array[stoId].getAddress(), investment_DAI);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
@@ -1542,10 +1554,12 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.getTokens(investment_DAI, ACCREDITED1.address);
             await I_DaiToken.connect(ACCREDITED1).approve(await I_USDTieredSTO_Array[stoId].getAddress(), investment_DAI);
 
-            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
-            await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
+            await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
@@ -1661,9 +1675,11 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.getTokens(investment_DAI, ACCREDITED1.address);
             await I_DaiToken.connect(ACCREDITED1).approve(await I_USDTieredSTO_Array[stoId].getAddress(), investment_DAI);
 
-            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
@@ -1730,7 +1746,7 @@ describe("USDTieredSTO", function() {
 
             // Revert stable coin address
             await I_USDTieredSTO_Array[stoId].connect(ISSUER).modifyAddresses(WALLET.address, TREASURYWALLET.address, [await I_DaiToken.getAddress()]);
-            await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
             // Make sure buying works again
             await I_USDTieredSTO_Array[stoId].connect(ACCREDITED1).buyWithUSD(ACCREDITED1.address, investment_DAI, await I_DaiToken.getAddress(), proof2, ltime, true, InvestorClass.NonUS,
@@ -1744,7 +1760,6 @@ describe("USDTieredSTO", function() {
 
             await revertToSnapshot(snapId);
         });
-
         it("should fail if after STO end time", async () => {
             const stoId = 3;
             const snapId = await takeSnapshot();
@@ -1776,9 +1791,11 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.getTokens(investment_DAI, ACCREDITED1.address);
             await I_DaiToken.connect(ACCREDITED1).approve(await I_USDTieredSTO_Array[stoId].getAddress(), investment_DAI);
 
-            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const stoAddress = await I_USDTieredSTO_Array[stoId].getAddress();
@@ -1875,9 +1892,11 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.getTokens(investment_DAI, ACCREDITED1.address);
             await I_DaiToken.connect(ACCREDITED1).approve(stoAddress, investment_DAI);
 
-            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const chainId = (await ethers.provider.getNetwork()).chainId;
@@ -1929,9 +1948,9 @@ describe("USDTieredSTO", function() {
 
             await revertToSnapshot(snapId);
         });
-        });
+    });
 
-        describe("Prep STO", async () => {
+    describe("Prep STO", async () => {
         it("should jump forward to after STO start", async () => {
             const stoId = 0;
             await increaseTime(duration.days(3));
@@ -2211,7 +2230,6 @@ describe("USDTieredSTO", function() {
             expect(final_WalletETHBal).to.equal(init_WalletETHBal, "Wallet ETH Balance not changed as expected");
             expect(final_WalletPOLYBal).to.equal(init_WalletPOLYBal + investment_POLY, "Wallet POLY Balance not changed as expected");
         });
-
         it("should successfully buy using buyWithUSD at tier 0 for NONACCREDITED1", async () => {
             const stoId = 0;
             const tierId = 0;
@@ -2239,9 +2257,11 @@ describe("USDTieredSTO", function() {
             const init_WalletPOLYBal = await I_PolyToken.balanceOf(WALLET.address);
             const init_WalletDAIBal = await I_DaiToken.balanceOf(WALLET.address);
 
-            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
+                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const chainId = (await ethers.provider.getNetwork()).chainId;
@@ -2693,8 +2713,6 @@ describe("USDTieredSTO", function() {
             await I_USDOracle.connect(POLYMATH).changePrice(USDETH);
             await I_POLYOracle.connect(POLYMATH).changePrice(USDPOLY);
         });
-
-
         it("should successfully buy across tiers for NONACCREDITED ETH", async () => {
             const stoId = 1;
             const startTier = 0;
@@ -2924,7 +2942,7 @@ describe("USDTieredSTO", function() {
             const init_WalletPOLYBal = await I_PolyToken.balanceOf(WALLET.address);
             const init_WalletDAIBal = await I_DaiToken.balanceOf(WALLET.address);
 
-            await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
             await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
@@ -3113,9 +3131,9 @@ describe("USDTieredSTO", function() {
 
             expect(await I_USDTieredSTO_Array[stoId].isOpen()).to.be.false;
 
-            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
-            // await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            // keep as is; handled earlier
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const chainId = (await ethers.provider.getNetwork()).chainId;
@@ -3182,7 +3200,6 @@ describe("USDTieredSTO", function() {
             )
             ).to.be.reverted;
         });
-
         it("should fail and revert when all tiers sold out despite oracle price change", async () => {
             const stoId = 1;
 
@@ -3640,7 +3657,6 @@ describe("USDTieredSTO", function() {
             expect(await I_USDTieredSTO_Array[stoId].investorInvested(ACCREDITED1.address, ETH)).to.equal(init_investorInvestedETH, "investorInvestedETH not changed as expected");
             expect(await I_USDTieredSTO_Array[stoId].investorInvested(ACCREDITED1.address, POLY)).to.equal(init_investorInvestedPOLY + investment_POLY, "investorInvestedPOLY not changed as expected");
         });
-
         it("should successfully buy a partial amount and refund balance when reaching NONACCREDITED cap", async () => {
             const stoId = 2;
             const tierId = 0;
@@ -4124,7 +4140,6 @@ describe("USDTieredSTO", function() {
             expect(final_WalletETHBal).to.equal(init_WalletETHBal, "Wallet ETH Balance not changed as expected");
             expect(final_WalletPOLYBal).to.equal(init_WalletPOLYBal + investment_POLY, "Wallet POLY Balance not changed as expected");
         });
-
         it("should buy out the rest of the sto", async () => {
             const stoId = 2;
             const tierId = 1;
@@ -4349,7 +4364,7 @@ describe("USDTieredSTO", function() {
             expect(ethers.decodeBytes32String(await I_USDTieredSTOFactory.name()).replace(/\u0000/g, '')).to.equal("USDTieredSTO");
             // PASSING_CASE: WITH HIDDEN CHARACTERS FAILING IT. UNCOMMENT TO TEST
             // expect(await I_USDTieredSTOFactory.description()).to.equal(
-            //     "It allows both accredited and non-accredited investors to contribute into the STO. Non-accredited investors will be capped at a maximum investment limit (as a default or specific to their jurisdiction). Tokens will be sold according to tiers sequentially & each tier has its own price and volume of tokens to sell. Upon receipt of funds (ETH, POLY or DAI), security tokens will automatically transfer to investor’s wallet address"
+            //     "It allows both accredited and non-accredited investors to contribute into the STO. Non-accredited investors will be capped at a maximum investment limit (as a default or specific to their jurisdiction). Tokens will be sold according to tiers sequentially & each tier has its own price and volume of tokens to sell. Upon receipt of funds (ETH, POLY or DAI), security tokens will automatically transfer to investor's wallet address"
             // );
             expect(await I_USDTieredSTOFactory.title()).to.equal("USD Tiered STO");
             expect(await I_USDTieredSTOFactory.version()).to.equal("3.0.0");

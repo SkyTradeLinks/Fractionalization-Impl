@@ -9,7 +9,9 @@ if (dotenvResult.error) {
   throw dotenvResult.error;
 }
 
-const { PROVIDER_URL, OWNER_PRIVATE_KEY, ETHERSCAN_API_KEY } = process.env;
+const { PROVIDER_URL, OWNER_PRIVATE_KEY, ETHERSCAN_API_KEY, SOLIDITY_COVERAGE, FORK_URL, FORK_BLOCK } = process.env;
+const isCoverage = !!SOLIDITY_COVERAGE;
+const shouldFork = !!FORK_URL;
 const accounts = [...(OWNER_PRIVATE_KEY ? [OWNER_PRIVATE_KEY] : [])];
 
 const config: HardhatUserConfig = {
@@ -22,11 +24,11 @@ const config: HardhatUserConfig = {
         version: "0.8.30",
         settings: {
           optimizer: {
-            enabled: true,
+            enabled: !isCoverage,
             runs: 200,
             details: { yul: false },
           },
-          viaIR: true,
+          viaIR: isCoverage ? false : true,
           metadata: {
             bytecodeHash: "none", // disable ipfs
             useLiteralContent: true, // use source code
@@ -37,13 +39,23 @@ const config: HardhatUserConfig = {
         version: "0.8.17",
         settings: {
           optimizer: {
-            enabled: true,
+            enabled: !isCoverage,
             runs: 1000,
           },
-          viaIR: true,
+          viaIR: isCoverage ? false : true,
         },
       },
     ],
+    overrides: isCoverage ? {
+      "contracts/modules/STO/USDTiered/USDTieredSTO.sol": {
+        version: "0.8.30",
+        settings: {
+          optimizer: { enabled: true, runs: 200 },
+          viaIR: true,
+          metadata: { bytecodeHash: "none", useLiteralContent: true },
+        },
+      },
+    } : {}
   },
   networks: {
     local: {
@@ -51,13 +63,12 @@ const config: HardhatUserConfig = {
       chainId: 31337,
     },
     hardhat: {
-      // This is the crucial part
-      forking: {
-        url: "", // Your RPC URL
-        // Optional: pin the block number for consistent tests
-        blockNumber: 19000000
-      },
-      chainId: 1337, // Keep the local chainId
+      // Only fork when FORK_URL is explicitly provided; disable during coverage.
+      forking: !isCoverage && shouldFork ? {
+        url: FORK_URL as string,
+        blockNumber: FORK_BLOCK ? Number(FORK_BLOCK) : undefined,
+      } : undefined,
+      chainId: 1337,
     },
     localhost: {
       chainId: 1337,

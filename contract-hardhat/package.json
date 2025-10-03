@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "coverage": "NODE_OPTIONS=\"--max-old-space-size=8192\" npx hardhat coverage",
+    "coverage": "NODE_OPTIONS=\"--max-old-space-size=8192\" SOLIDITY_COVERAGE=true npx hardhat coverage",
     "clean": "rimraf abi artifacts build cache generated lib/generated typechain-types",
     "test": "hardhat typechain && hardhat test",
     "compile": "hardhat compile",

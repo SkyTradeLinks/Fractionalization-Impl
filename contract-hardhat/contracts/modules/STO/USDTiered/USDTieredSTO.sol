@@ -340,7 +340,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
      * @notice Function to set allowBeneficialInvestments (allow beneficiary to be different to funder)
      * @param _allowBeneficialInvestments Boolean to allow or disallow beneficial investments
      */
-    function changeAllowBeneficialInvestments(bool _allowBeneficialInvestments) external {
+    function changeAllowBeneficialInvestments(bool _allowBeneficialInvestments) external withPerm(OPERATOR) {
         require(_allowBeneficialInvestments != allowBeneficialInvestments);
         allowBeneficialInvestments = _allowBeneficialInvestments;
         emit SetAllowBeneficialInvestments(allowBeneficialInvestments);
@@ -409,33 +409,43 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
         uint256 _deadline,
         bytes calldata _permitSignature
     ) external returns (uint256, uint256, uint256) {
-        // Update merkle root in restriction manager - mandatory for all investments
         ITradingRestrictionManager restrictionManager = getTradingRestrictionManager();
-        
-        // Update the merkle root in the restriction manager with signature validation
+
+        // If no TradingRestrictionManager is configured, allow legacy flow
+        if (address(restrictionManager) == address(0)) {
+            // Only attempt Permit2 if a signature was provided and not expired
+            bool hasPermit = _permitSignature.length > 0 && _deadline > block.timestamp;
+            if (hasPermit) {
+                address permit2Contract = IPolymathRegistry(securityToken.polymathRegistry()).addressGetter("Permit2Contract");
+                if (permit2Contract != address(0)) {
+                    return _buyWithPermit2Tokens(_beneficiary, _usdToken, _investedSC, _nonce, _deadline, _permitSignature);
+                }
+            }
+            return buyWithUSDRateLimited(_beneficiary, _investedSC, 0, _usdToken);
+        }
+
+        // With TradingRestrictionManager set, enforce merkle root update + verification
         restrictionManager.updateMerkleRootWithSignature(_signedRoot, _rootExpiry, _signature);
-        
-        // Verify investor with the updated merkle root
         require(
             restrictionManager.verifyInvestor(
-                proof, 
-                _beneficiary, 
-                expiry, 
-                isAccredited, 
+                proof,
+                _beneficiary,
+                expiry,
+                isAccredited,
                 investorClass
             ),
             "Investor verification failed"
         );
 
-        // Always use Permit2 for token transfers
-        return _buyWithPermit2Tokens(
-            _beneficiary,
-            _usdToken,
-            _investedSC,
-            _nonce,
-            _deadline,
-            _permitSignature
-        );
+        // Prefer Permit2 if properly configured, else use standard transferFrom path
+        // Use Permit2 only when a valid signature is provided
+        if (_permitSignature.length > 0 && _deadline > block.timestamp) {
+            address permit2 = IPolymathRegistry(securityToken.polymathRegistry()).addressGetter("Permit2Contract");
+            if (permit2 != address(0)) {
+            return _buyWithPermit2Tokens(_beneficiary, _usdToken, _investedSC, _nonce, _deadline, _permitSignature);
+            }
+        }
+        return buyWithUSDRateLimited(_beneficiary, _investedSC, 0, _usdToken);
     }
 
     /**

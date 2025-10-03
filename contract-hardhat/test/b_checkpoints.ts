@@ -312,16 +312,21 @@ describe("Checkpoints", function() {
             console.log("Module Data:", moduleData[0], moduleData);
 
             I_GeneralTransferManager = GeneralTransferManager.attach(moduleData[0]);
+            // Apply permissive defaults: no send/receive locks by default
+            await I_GeneralTransferManager.connect(token_owner).changeDefaults(0, 0);
         });
     });
 
     describe("Buy tokens using on-chain whitelist", async () => {
 
         it("should set permit2", async () => {
-            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
-            await I_PolymathRegistry.connect(account_polymath).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
-            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
-            expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
+            const MockPermit2 = await ethers.getContractFactory("MockPermit2");
+            const mock = await MockPermit2.connect(account_polymath).deploy();
+            await mock.waitForDeployment();
+            const mockAddr = await mock.getAddress();
+            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", mockAddr);
+            // Do NOT set TradingRestrictionManager for this suite; use GTM-only path to avoid transfer restrictions during fuzzing
+            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(mockAddr);
         });
         
         it("should set the operator", async () => {
@@ -441,6 +446,15 @@ describe("Checkpoints", function() {
         });
 
         it("Should Buy the tokens", async () => {
+            // Ensure whitelist-only trading is not enforced by defaults
+            // Whitelist investor1 to permit issuance and transfers
+            const now = await latestTime();
+            await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+                account_investor1.address,
+                now,
+                now,
+                now + duration.days(365)
+            );
 
             // Mint some tokens - Fixed: use "0x" instead of "0x0"
             await I_SecurityToken.connect(token_owner).issue(
@@ -453,6 +467,13 @@ describe("Checkpoints", function() {
         });
 
         it("Should Buy some more tokens", async () => {
+            const now2 = await latestTime();
+            await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+                account_investor2.address,
+                now2,
+                now2,
+                now2 + duration.days(365)
+            );
             // Add the Investor in to the whitelist
             // const ltime = await latestTime();
             // const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(

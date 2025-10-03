@@ -140,6 +140,7 @@ describe("Trading restriction Manager", function() {
     let stGetter: Contract;
     let I_TradingRestrictionManager: any;
     let I_Permit2: any;
+    let PERMIT2_FOR_RUNTIME: string;
     let I_DaiToken: any;
     let PolyTokenFaucetFactory: any;
     let I_USDTieredSTOFactory: any;
@@ -585,15 +586,16 @@ describe("Trading restriction Manager", function() {
         //     expect(tradingRestrictionEvent!.args.newManager).to.equal(I_TradingRestrictionManager.target, "TradingRestrictionManager not set correctly");
         // });
 
-        // it("should set TradingRestrictionManager", async () => {
-        //     await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", I_Permit2.target);
-        //     expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(I_Permit2.target);
-        // });
-
         it("should set permit2", async () => {
-            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
+            // Always use MockPermit2 locally to avoid external dependency
+            const MockPermit2 = await ethers.getContractFactory("MockPermit2");
+            I_Permit2 = await MockPermit2.connect(account_polymath).deploy();
+            await I_Permit2.waitForDeployment();
+            PERMIT2_FOR_RUNTIME = await I_Permit2.getAddress();
+
+            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", PERMIT2_FOR_RUNTIME);
             await I_PolymathRegistry.connect(account_polymath).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
-            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
+            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_FOR_RUNTIME);
             expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
         });
 
@@ -732,7 +734,12 @@ describe("Trading restriction Manager", function() {
             await I_DaiToken.getTokens(investment_DAI, account_investor1.address);
             // await I_DaiToken.connect(account_investor1).approve(stoAddress, investment_DAI);
 
-            await I_DaiToken.connect(account_investor1).approve(PERMIT2_ADDRESS, ethers.MaxUint256);
+            await I_DaiToken.connect(account_investor1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
+
+            const allowance = await I_DaiToken.allowance(account_investor1.address, PERMIT2_FOR_RUNTIME);
+            console.log("Permit2 allowance:", allowance.toString());
+            console.log("Investor DAI before:", (await I_DaiToken.balanceOf(account_investor1.address)).toString());
+            console.log("Wallet DAI before:", (await I_DaiToken.balanceOf(account_issuer.address)).toString());
 
             const { permit, permitSignature } = await generatePermit2Data(
                 daiAddress,
