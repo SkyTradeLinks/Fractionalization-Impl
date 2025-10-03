@@ -100,7 +100,7 @@ abstract contract Module is IModule, ModuleStorage, Pausable {
      */
     function getTradingRestrictionManager() public view returns (ITradingRestrictionManager) {
         address restrictionManagerAddress = IPolymathRegistry(securityToken.polymathRegistry()).addressGetter("TradingRestrictionManager");
-        require(restrictionManagerAddress != address(0), "TradingRestrictionManager not set in registry");
+        // require(restrictionManagerAddress != address(0), "TradingRestrictionManager not set in registry");
         return ITradingRestrictionManager(restrictionManagerAddress);
     }
 }

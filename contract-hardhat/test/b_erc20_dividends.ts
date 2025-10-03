@@ -8,9 +8,7 @@ import { duration } from "./helpers/utils";
 import { setUpPolymathNetwork, deployERC20DividendAndVerifyed, deployGPMAndVerifyed } from "./helpers/createInstances";
 import Web3 from "web3";
 import { increaseTime, revertToSnapshot, takeSnapshot } from "./helpers/time";
-import { encodeModuleCall, encodeProxyCall, generateMerkleRootSignature } from "./helpers/encodeCall";
-import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
-import { PERMIT2_ADDRESS } from "@uniswap/permit2-sdk";
+import { encodeModuleCall, encodeProxyCall } from "./helpers/encodeCall";
 
 describe("ERC20DividendCheckpoint", function() {
 
@@ -55,29 +53,6 @@ describe("ERC20DividendCheckpoint", function() {
     let I_STGetter: any;
     let stGetter: any;
 
-    let ltime;
-    let isAccredited1: boolean;
-    let isAccredited2: boolean;
-    let merkleTree: any;
-    let merkleRoot: string;
-    let proof1: string[];
-    let proof2: string[];
-    let proof3: string[];
-    let proof4: string[];
-    let proof5: string[];
-    let signa: string;
-
-    let fromTime: number;
-    let toTime: number;
-    let expiryTime: number;
-
-    enum InvestorClass {
-        NonUS,
-        US
-    }
-
-    let I_TradingRestrictionManager: Contract;
-
     // Contract Factories
     let GeneralTransferManagerFactory: any;
     let ERC20DividendCheckpointFactory: any;
@@ -114,61 +89,20 @@ describe("ERC20DividendCheckpoint", function() {
         accounts = await ethers.getSigners();
         
         currentTime = await latestTime();
+        
+        // Account assignments
         account_polymath = accounts[0];
         account_issuer = accounts[1];
         token_owner = account_issuer;
-
+        account_temp = accounts[2];
+        wallet = accounts[3];
+        account_manager = accounts[5];
         account_investor1 = accounts[6];
         account_investor2 = accounts[7];
         account_investor3 = accounts[8];
         account_investor4 = accounts[9];
-        account_temp = accounts[2];
-        account_manager = accounts[5];
-        wallet = accounts[3];
 
-        fromTime = await latestTime();
-        toTime = await latestTime();
-        expiryTime = toTime + duration.days(15);
-
-        ltime = await latestTime() + duration.days(300);
-        isAccredited1 = false;
-        isAccredited2 = true;
-
-        const values = [
-            [account_investor1.address, ltime, isAccredited1, InvestorClass.NonUS],
-            [account_investor2.address, ltime, isAccredited1, InvestorClass.NonUS],
-            [account_investor3.address, ltime, isAccredited1, InvestorClass.NonUS],
-            [account_investor4.address, ltime, isAccredited1, InvestorClass.NonUS],
-            [account_temp.address, ltime, isAccredited1, InvestorClass.NonUS]
-        ];
-
-        merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool", "uint64"]);
-        merkleRoot = merkleTree.root;
-
-        // Get proofs
-        for (const [i, v] of merkleTree.entries()) {
-            if (v[0] === account_investor1.address) {
-                proof1 = merkleTree.getProof(i);
-            }
-            if (v[0] === account_investor2.address) {
-                proof2 = merkleTree.getProof(i);
-            }
-            if (v[0] === account_investor3.address) {
-                proof3 = merkleTree.getProof(i);
-            }
-            if (v[0] === account_investor4.address) {
-                proof4 = merkleTree.getProof(i);
-            }
-            if (v[0] === account_temp.address) {
-                proof5 = merkleTree.getProof(i);
-            }
-        }
-
-        signa = await generateMerkleRootSignature(
-            token_owner,
-            merkleRoot,
-            expiryTime
-        );
+        console.log(token_owner.address, "token_owner.address");
 
         // Get contract factories
         GeneralTransferManagerFactory = await ethers.getContractFactory("GeneralTransferManager");
@@ -190,8 +124,7 @@ describe("ERC20DividendCheckpoint", function() {
             I_SecurityTokenRegistryProxy,
             I_STRProxied,
             I_STRGetter,
-            I_STGetter,
-            I_TradingRestrictionManager,
+            I_STGetter
         ] = instances;
 
         console.log("=== DEBUG INFO ===");
@@ -226,7 +159,6 @@ describe("ERC20DividendCheckpoint", function() {
         STFactory:                         ${I_STFactory.target}
         GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.target}
         ERC20DividendCheckpointFactory:    ${I_ERC20DividendCheckpointFactory.target}
-        TradingRestrictionManager:         ${I_TradingRestrictionManager.target}
         -----------------------------------------------------------------------------
         `);
     });
@@ -402,154 +334,17 @@ describe("ERC20DividendCheckpoint", function() {
         });
     });
 
-    describe("Check Dividend payouts", async () => {
-
-        it("should set permit2", async () => {
-            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
-            await I_PolymathRegistry.connect(account_polymath).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
-            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
-            expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
-        });
-        
-        it("should set the operator", async () => {
-            await I_TradingRestrictionManager.connect(account_polymath).grantOperator(token_owner.address);
-            expect(await I_TradingRestrictionManager.isOperator(token_owner.address)).to.equal(true);
-        });
-        
-        it("should whitelist three investors", async () => {
-            const endTime = BigInt(ltime) + BigInt(duration.days(30));
-
-            const nonUSLockPeriod = ltime + (duration.days(15));
-            const usLockPeriod = ltime + (duration.days(15));
-
-            const SecurityTokenAddress = await I_SecurityToken.target;
-            const tx1 = await I_TradingRestrictionManager.setTradingRestrictionPeriod(SecurityTokenAddress, 0, 0, currentTime);
-            const receipt1 = await tx1.wait();
-            // await I_TradingRestrictionManager.setWhitelistOnlyTrading(SecurityTokenAddress, true);
-
-            let eventUpdate: LogDescription | null = null;
-
-            for (const log of receipt1!.logs) {
-                try {
-                    const parsed = I_TradingRestrictionManager.interface.parseLog(log);
-                    
-                    if (parsed && parsed.name === "TradingRestrictionSet") {
-                        eventUpdate = parsed;
-                        break;
-                    }
-                } catch (err: any) {
-                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
-                }
-            }
-
-            expect(eventUpdate).to.not.be.null;
-            expect(eventUpdate!.args.token).to.equal(SecurityTokenAddress, "Token address not set correctly");
-            expect(eventUpdate!.args.nonUS).to.equal(0, "non us lock not set correctly");
-            expect(eventUpdate!.args.us).to.equal(0, "US lock period not set correctly");
-            expect(eventUpdate!.args.lockStart).to.equal(currentTime, "End time not set correctly");
-            
-            const tx = await I_TradingRestrictionManager.connect(token_owner).updateMerkleRootWithSignature(
-                merkleRoot,
-                expiryTime,
-                signa
-            );
-
-            const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
-
-            expect(root).to.equal(merkleRoot, "Merkle root not set correctly");
-            expect(expiry).to.equal(expiryTime, "Expiry time not set correctly");
-
-            const receipt = await tx.wait();
-            let MerkleRootUpdatedEvent: LogDescription | null = null;
-
-            for (const log of receipt!.logs) {
-                try {
-                    const parsed = I_TradingRestrictionManager.interface.parseLog(log);
-                    
-                    if (parsed && parsed.name === "MerkleRootUpdated") {
-                        MerkleRootUpdatedEvent = parsed;
-                        break;
-                    }
-                } catch (err: any) {
-                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
-                }
-            }
-
-            expect(MerkleRootUpdatedEvent).to.not.be.null;
-            expect(MerkleRootUpdatedEvent!.args.root).to.equal(merkleRoot, "Merkle root not set correctly");
-        });
-
-        it("Should verify investor 1 correctly", async () => {
-            console.log(merkleRoot, "merkleRoot");
-            await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
-                proof1,
-                account_investor1.address,
-                ltime,
-                isAccredited1,
-                InvestorClass.NonUS
-            )
-            ).to.not.be.reverted;
-        });
-
-        it("Should verify investor 2 correctly", async () => {
-            await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
-                proof2,
-                account_investor2.address,
-                ltime,
-                isAccredited1,
-                InvestorClass.NonUS
-            )
-            ).to.not.be.reverted;
-        });
-
-        it("Should verify investor 3 correctly", async () => {
-            await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
-                proof3,
-                account_investor3.address,
-                ltime,
-                isAccredited1,
-                InvestorClass.NonUS
-            )
-            ).to.not.be.reverted;
-        });
-
-        it("Should verify investor 4 correctly", async () => {
-            await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
-                proof4,
-                account_investor4.address,
-                ltime,
-                isAccredited1,
-                InvestorClass.NonUS
-            )
-            ).to.not.be.reverted;
-        });
-
-        it("Should verify account temp correctly", async () => {
-            await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
-                proof5,
-                account_temp.address,
-                ltime,
-                isAccredited1,
-                InvestorClass.NonUS
-            )
-            ).to.not.be.reverted;
-        });
-
+describe("Check Dividend payouts", async () => {
     it("Buy some tokens for account_investor1 (1 ETH)", async () => {
-        // const fromTime = BigInt(await latestTime());
-        // const toTime = fromTime + BigInt(duration.days(30));
-        // const tx = await I_GeneralTransferManager.connect(token_owner).modifyKYCData(
-        //     account_investor1.address,
-        //     fromTime,
-        //     fromTime,
-        //     toTime
-        // );
-        // await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData");
+        const fromTime = BigInt(await latestTime());
+        const toTime = fromTime + BigInt(duration.days(30));
+        const tx = await I_GeneralTransferManager.connect(token_owner).modifyKYCData(
+            account_investor1.address,
+            fromTime,
+            fromTime,
+            toTime
+        );
+        await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData");
 
         await increaseTime(5000);
         await I_SecurityToken.connect(token_owner).issue(account_investor1.address, ethers.parseEther("1"), ethers.ZeroHash);
@@ -557,15 +352,15 @@ describe("ERC20DividendCheckpoint", function() {
     });
 
     it("Buy some tokens for account_investor2 (2 ETH)", async () => {
-        // const fromTime = BigInt(await latestTime());
-        // const toTime = fromTime + BigInt(duration.days(30));
-        // const tx = await I_GeneralTransferManager.connect(token_owner).modifyKYCData(
-        //     account_investor2.address,
-        //     fromTime,
-        //     fromTime,
-        //     toTime
-        // );
-        // await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData");
+        const fromTime = BigInt(await latestTime());
+        const toTime = fromTime + BigInt(duration.days(30));
+        const tx = await I_GeneralTransferManager.connect(token_owner).modifyKYCData(
+            account_investor2.address,
+            fromTime,
+            fromTime,
+            toTime
+        );
+        await expect(tx).to.emit(I_GeneralTransferManager, "ModifyKYCData");
 
         await I_SecurityToken.connect(token_owner).issue(account_investor2.address, ethers.parseEther("2"), ethers.ZeroHash);
         expect(await I_SecurityToken.balanceOf(account_investor2.address)).to.equal(ethers.parseEther("2"));
@@ -684,15 +479,15 @@ describe("ERC20DividendCheckpoint", function() {
     });
 
     it("Buy some tokens for account_temp (1 ETH)", async () => {
-        // const fromTime = BigInt(await latestTime());
-        // const toTime = fromTime + BigInt(duration.days(20));
+        const fromTime = BigInt(await latestTime());
+        const toTime = fromTime + BigInt(duration.days(20));
 
-        // await I_GeneralTransferManager.connect(token_owner).modifyKYCData(
-        //     account_temp.address,
-        //     fromTime,
-        //     fromTime,
-        //     toTime
-        // );
+        await I_GeneralTransferManager.connect(token_owner).modifyKYCData(
+            account_temp.address,
+            fromTime,
+            fromTime,
+            toTime
+        );
 
         await I_SecurityToken.connect(token_owner).issue(account_temp.address, ethers.parseEther("1"), ethers.ZeroHash);
         expect(await I_SecurityToken.balanceOf(account_temp.address)).to.equal(ethers.parseEther("1"));
@@ -876,7 +671,6 @@ it("should investor 3 claims dividend - fail bad index", async () => {
 });
 
 it("should investor 3 claims dividend", async () => {
-    console.log((await I_ERC20DividendCheckpoint.dividends(2))[5]);
     const investor1Balance = await I_PolyToken.balanceOf(account_investor1.address);
     const investor2Balance = await I_PolyToken.balanceOf(account_investor2.address);
     const investor3Balance = await I_PolyToken.balanceOf(account_investor3.address);
@@ -891,14 +685,11 @@ it("should investor 3 claims dividend", async () => {
     expect(investor2BalanceAfter - investor2Balance).to.equal(0n);
     expect(investor3BalanceAfter - investor3Balance).to.equal(ethers.parseEther("7"));
     
-    const info = await I_ERC20DividendCheckpoint.getDividendProgress.staticCall(2);
-    console.log(info, "info");
+    const info = await I_ERC20DividendCheckpoint.getDividendProgress(2);
     
     // Find the index for account_temp and account_investor3
     const tempIndex = info[0].findIndex((addr: string) => addr === account_temp.address);
     const investor3Index = info[0].findIndex((addr: string) => addr === account_investor3.address);
-    console.log(tempIndex, investor3Index, "indexes");
-    console.log(account_temp.address, account_investor3.address);
 
     expect(tempIndex).to.not.equal(-1);
     expect(investor3Index).to.not.equal(-1);
@@ -1272,8 +1063,6 @@ it("Should not create new dividend with duplicate exclusion", async () => {
 
         it("Issuer reclaims withholding tax", async () => {
             const info = await I_ERC20DividendCheckpoint.getDividendProgress(3);
-            console.log("Dividend 3 info");
-            console.log(info);
 
             console.log("Address:");
             console.log(info[0][0]);

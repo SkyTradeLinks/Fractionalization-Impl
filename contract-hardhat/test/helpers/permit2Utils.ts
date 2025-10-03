@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { Addressable, ethers } from "ethers";
 
 import {
   SignatureTransfer, // Useful for generating permit data for signature style approvals
@@ -11,7 +11,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
  * Generate Permit2 data with real signature from user's wallet
  */
 export const generatePermit2Data = async (
-  tokenAddress: string,
+  tokenAddress: string | Addressable,
   amountInWei: string,
   spender: string,
   signer: ethers.JsonRpcSigner | HardhatEthersSigner,

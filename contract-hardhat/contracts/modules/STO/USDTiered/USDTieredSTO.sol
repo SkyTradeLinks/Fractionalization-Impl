@@ -365,6 +365,19 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
         return buyWithPOLYRateLimited(_beneficiary, _investedPOLY, 0);
     }
 
+    // function buyWithUSD(address _beneficiary, uint256 _investedSC, IERC20 _usdToken, bytes32[] calldata proof, uint64 expiry, bool isAccredited, ITradingRestrictionManager.InvestorClass investorClass) external returns (uint256, uint256, uint256) {
+    //     ITradingRestrictionManager restrictionManager = getTradingRestrictionManager();
+    //     if (address(restrictionManager) == address(0)) {    
+    //         return buyWithUSDRateLimited(_beneficiary, _investedSC, 0, _usdToken);
+    //     } else {
+    //         require (
+    //             ITradingRestrictionManager(restrictionManager).verifyInvestor(proof, _beneficiary, expiry, isAccredited, investorClass),
+    //             "Investor verification failed"
+    //         );
+    //         return buyWithUSDRateLimited(_beneficiary, _investedSC, 0, _usdToken);
+    //     }
+    // }
+
     /**
      * @notice Purchase tokens using USD with optional Permit2 support
      * @param _beneficiary Address where security tokens will be sent

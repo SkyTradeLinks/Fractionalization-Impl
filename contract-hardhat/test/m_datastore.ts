@@ -207,7 +207,7 @@ describe("Data store", function() {
 
         it("Should set and fetch address correctly", async () => {
             await I_DataStore.connect(token_owner).setAddress(key, address_one);
-            assert.equal(await I_DataStore.getAddressForTest(key), address_one, "Incorrect Data Inserted");
+            assert.equal(await I_DataStore.addressGetter(key), address_one, "Incorrect Data Inserted");
         });
 
         it("Should set and fetch string correctly", async () => {
@@ -364,8 +364,8 @@ describe("Data store", function() {
 
         it("Should set and fetch multiple address correctly", async () => {
             await I_DataStore.connect(token_owner).setAddressMulti([key, key2], [address_one, address_two]);
-            assert.equal(await I_DataStore.getAddressForTest(key), address_one, "Incorrect Data Inserted");
-            assert.equal(await I_DataStore.getAddressForTest(key2), address_two, "Incorrect Data Inserted");
+            assert.equal(await I_DataStore.addressGetter(key), address_one, "Incorrect Data Inserted");
+            assert.equal(await I_DataStore.addressGetter(key2), address_two, "Incorrect Data Inserted");
         });
 
         it("Should set and fetch multiple bool correctly", async () => {
