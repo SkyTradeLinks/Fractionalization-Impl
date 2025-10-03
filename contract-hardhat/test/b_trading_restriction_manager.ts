@@ -141,7 +141,6 @@ describe("TradingRestrictionManager", function () {
         merkleRoot,
         expiry
     );
-    console.log("sinaturee1", signa)
     signa1 = await generateMerkleRootSignature(
         nonOperator,
         merkleRoot,
@@ -767,7 +766,6 @@ describe("TradingRestrictionManager", function () {
 
   describe("KYC Data Retrieval", function () {
     // beforeEach(async function () {
-    //   console.log("signature2:", signa);
     //   await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(merkleRoot, expiry, signa);
     // });
 
@@ -779,7 +777,7 @@ describe("TradingRestrictionManager", function () {
       const now = Math.floor(Date.now() / 1000);
       expect(result.canSendAfter).to.be.gt(now);
       expect(result.canReceiveAfter).to.be.gt(now);
-      expect(result.expiryTime).to.be.lt(expiry);
+      expect(result.expiryTime).to.be.lt(now);
       expect(result.added).to.equal(0);
     });
 

@@ -9,7 +9,7 @@ if (dotenvResult.error) {
   throw dotenvResult.error;
 }
 
-const { PROVIDER_URL, OWNER_PRIVATE_KEY, ETHERSCAN_API_KEY } = process.env;
+const { PROVIDER_URL, OWNER_PRIVATE_KEY, ETHERSCAN_API_KEY, RPC_URL } = process.env;
 const accounts = [...(OWNER_PRIVATE_KEY ? [OWNER_PRIVATE_KEY] : [])];
 
 const config: HardhatUserConfig = {
@@ -53,7 +53,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       // This is the crucial part
       forking: {
-        url: "", // Your RPC URL
+        url: RPC_URL, // Your RPC URL
         // Optional: pin the block number for consistent tests
         blockNumber: 19000000
       },
