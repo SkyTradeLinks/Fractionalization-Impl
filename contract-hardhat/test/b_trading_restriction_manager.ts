@@ -3,6 +3,7 @@ import { setUpPolymathNetwork } from "./helpers/createInstances";
 import { latestTime } from "./helpers/latestTime";
 import { duration } from "./helpers/utils";
 import { network } from "hardhat";
+import { generateMerkleRootSignature } from "./helpers/encodeCall";
 
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
@@ -34,6 +35,9 @@ describe("TradingRestrictionManager", function () {
     let I_STGetter;
     let stGetter;
     let ltime;
+    let signa;
+    let proof3;
+    let I_TradingRestrictionManager;
 
     // Module key
     const delegateManagerKey = 1;
@@ -79,7 +83,8 @@ describe("TradingRestrictionManager", function () {
           I_SecurityTokenRegistryProxy,
           I_STRProxied,
           I_STRGetter,
-          I_STGetter
+          I_STGetter,
+          I_TradingRestrictionManager
       ] = instances;
 
         // Printing all the contract addresses
@@ -94,18 +99,12 @@ describe("TradingRestrictionManager", function () {
 
         STFactory:                         ${I_STFactory.target}
         GeneralTransferManagerFactory:     ${I_GeneralTransferManagerFactory.target}
+        TradingRestrictionManager:         ${I_TradingRestrictionManager.target}
         -----------------------------------------------------------------------------
         `);
   });
 
   beforeEach(async function () {
-    // Deploy contract
-    const TradingRestrictionManager = await ethers.getContractFactory("TradingRestrictionManager");
-    contract = await TradingRestrictionManager.deploy();
-
-    // Grant operator role
-    await contract.connect(owner).grantOperator(operator.address);
-
     // Prepare Merkle tree data
     ltime = await latestTime();
     expiry = await latestTime() + duration.days(100); // 100 days from now
@@ -113,31 +112,102 @@ describe("TradingRestrictionManager", function () {
     isAccredited2 = true;
 
     const values = [
-      [investor1.address, expiry, isAccredited1],
-      [investor2.address, expiry, isAccredited2],
-      [investor3.address, expiry, true]
+        [investor1.address, ltime, isAccredited1, InvestorClass.NonUS],
+        [investor2.address, ltime, isAccredited2, InvestorClass.NonUS],
+        [investor3.address, ltime, isAccredited2, InvestorClass.US],
     ];
 
-    merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool"]);
+    merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool", "uint64"]);
     merkleRoot = merkleTree.root;
 
     // Get proofs
     for (const [i, v] of merkleTree.entries()) {
-      if (v[0] === investor1.address) {
-        proof1 = merkleTree.getProof(i);
-      }
-      if (v[0] === investor2.address) {
-        proof2 = merkleTree.getProof(i);
-      }
+        if (v[0] === investor1.address) {
+            proof1 = merkleTree.getProof(i);
+        }
+        if (v[0] === investor2.address) {
+            proof2 = merkleTree.getProof(i);
+        }
+        if (v[0] === investor3.address) {
+            proof3 = merkleTree.getProof(i);
+        }
     }
+
+    signa = await generateMerkleRootSignature(
+        operator,
+        merkleRoot,
+        expiry
+    );
   });
 
   describe("Merkle Root Management", function () {
+    it("should whitelist three investors", async () => {
+      // const endTime = BigInt(ltime) + BigInt(duration.days(30));
+      
+      // const nonUSLockPeriod = ltime + (duration.days(15));
+      // const usLockPeriod = ltime + (duration.days(15));
+
+      // const SecurityTokenAddress = await I_SecurityToken.target;
+      // const tx1 = await I_TradingRestrictionManager.setTradingRestrictionPeriod(SecurityTokenAddress, 0, 0, endTime);
+      // const receipt1 = await tx1.wait();
+
+      // let eventUpdate: LogDescription | null = null;
+
+      // for (const log of receipt1!.logs) {
+      //     try {
+      //         const parsed = I_TradingRestrictionManager.interface.parseLog(log);
+              
+      //         if (parsed && parsed.name === "TradingRestrictionSet") {
+      //             eventUpdate = parsed;
+      //             break;
+      //         }
+      //     } catch (err: any) {
+      //         console.log(`Failed to parse log with STRProxied: ${err.message}`);
+      //     }
+      // }
+
+      // expect(eventUpdate).to.not.be.null;
+      // expect(eventUpdate!.args.token).to.equal(SecurityTokenAddress, "Token address not set correctly");
+      // expect(eventUpdate!.args.nonUS).to.equal(0, "non us lock not set correctly");
+      // expect(eventUpdate!.args.us).to.equal(0, "US lock period not set correctly");
+      // expect(eventUpdate!.args.lockStart).to.equal(endTime, "End time not set correctly");
+
+      const tx = await contract.connect(operator).updateMerkleRootWithSignature(
+          merkleRoot,
+          expiry,
+          signa
+      );
+
+      const { root, expiry: expiryTime } = await contract.getCurrentMerkleRoot();
+
+      expect(root).to.equal(merkleRoot, "Merkle root not set correctly");
+      expect(expiryTime).to.equal(expiry, "Expiry time not set correctly");
+
+      const receipt = await tx.wait();
+      let MerkleRootUpdatedEvent: LogDescription | null = null;
+
+      for (const log of receipt!.logs) {
+          try {
+              const parsed = contract.interface.parseLog(log);
+              
+              if (parsed && parsed.name === "MerkleRootUpdated") {
+                  MerkleRootUpdatedEvent = parsed;
+                  break;
+              }
+          } catch (err: any) {
+              console.log(`Failed to parse log with STRProxied: ${err.message}`);
+          }
+      }
+
+      expect(MerkleRootUpdatedEvent).to.not.be.null;
+      expect(MerkleRootUpdatedEvent!.args.root).to.equal(merkleRoot, "Merkle root not set correctly");
+  });
+
     it("should allow operator to set merkle root", async function () {
-      await contract.connect(operator).modifyKYCData(merkleRoot);
+      // await contract.connect(operator).modifyKYCData(merkleRoot);
       // Verify by checking that a valid proof works
       await expect(
-        contract.connect(investor1).verifyInvestor(
+        contract.connect(operator).verifyInvestor(
           proof1,
           investor1.address,
           expiry,
