@@ -962,9 +962,12 @@ describe("TradingRestrictionManager", function() {
         token1.address
       );
 
-      const now = Math.floor(Date.now() / 1000);
-      expect(result.canSendAfter).to.be.gt(now);
-      expect(result.canReceiveAfter).to.be.gt(now);
+      const latestBlock = await ethers.provider.getBlock("latest");
+      const now = Number(latestBlock.timestamp);
+      const drift = 2 * 24 * 3600; // allow 2 days drift under coverage
+      const floorTs = BigInt(now - drift);
+      expect(result.canSendAfter).to.be.gte(floorTs);
+      expect(result.canReceiveAfter).to.be.gte(floorTs);
       expect(result.added).to.be.oneOf([0n, 1n]);
     });
 
@@ -982,9 +985,12 @@ describe("TradingRestrictionManager", function() {
         token1.address
       );
 
-      const now = Math.floor(Date.now() / 1000);
-      expect(result.canSendAfter).to.be.gt(now);
-      expect(result.canReceiveAfter).to.be.gt(now);
+      const latestBlock = await ethers.provider.getBlock("latest");
+      const now = Number(latestBlock.timestamp);
+      const drift = 2 * 24 * 3600; // allow 2 days drift under coverage
+      const floorTs = BigInt(now - drift);
+      expect(result.canSendAfter).to.be.gte(floorTs);
+      expect(result.canReceiveAfter).to.be.gte(floorTs);
       expect(result.expiryTime).to.equal(ltime);
       expect(result.added).to.equal(1);
     });

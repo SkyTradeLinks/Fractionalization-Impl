@@ -340,7 +340,7 @@ contract USDTieredSTO is USDTieredSTOStorage, STO {
      * @notice Function to set allowBeneficialInvestments (allow beneficiary to be different to funder)
      * @param _allowBeneficialInvestments Boolean to allow or disallow beneficial investments
      */
-    function changeAllowBeneficialInvestments(bool _allowBeneficialInvestments) external {
+    function changeAllowBeneficialInvestments(bool _allowBeneficialInvestments) external withPerm(OPERATOR) {
         require(_allowBeneficialInvestments != allowBeneficialInvestments);
         allowBeneficialInvestments = _allowBeneficialInvestments;
         emit SetAllowBeneficialInvestments(allowBeneficialInvestments);
