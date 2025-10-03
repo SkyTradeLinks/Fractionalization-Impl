@@ -394,7 +394,7 @@ describe("Checkpoints", function() {
         it("Should verify investor 1 correctly", async () => {
             console.log(merkleRoot, "merkleRoot");
             await expect(
-                I_TradingRestrictionManager.connect(account_investor1).verifyInvestor(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
                 proof1,
                 account_investor1.address,
                 ltime,
@@ -418,7 +418,7 @@ describe("Checkpoints", function() {
 
         it("Should verify investor 3 correctly", async () => {
             await expect(
-                I_TradingRestrictionManager.connect(account_investor3).verifyInvestor(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
                 proof3,
                 account_investor3.address,
                 ltime,
@@ -430,7 +430,7 @@ describe("Checkpoints", function() {
 
         it("Should verify investor 4 correctly", async () => {
             await expect(
-                I_TradingRestrictionManager.connect(account_investor4).verifyInvestor(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
                 proof4,
                 account_investor4.address,
                 ltime,
