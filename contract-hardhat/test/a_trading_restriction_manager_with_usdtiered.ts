@@ -718,7 +718,7 @@ describe("Trading restriction Manager", function() {
         it("should successfully buy using buyWithUSD at tier 0 for NONACCREDITED account_investor1", async () => {
             const stoId = 0;
             const tierId = 0;
-            await I_USDTieredSTO_Array[stoId].connect(account_polymath).changeAllowBeneficialInvestments(true);
+            await I_USDTieredSTO_Array[stoId].connect(token_owner).changeAllowBeneficialInvestments(true);
 
             await ethers.provider.send("evm_increaseTime", [duration.days(1)]);
 
@@ -831,6 +831,7 @@ describe("Trading restriction Manager", function() {
         it("Create new dividend", async () => {
             const maturity = (await latestTime());
             const expiry = (await latestTime()) + duration.days(10);
+            // Ensure investor supply before creating dividend
             await I_PolyToken.connect(token_owner).approve(I_ERC20DividendCheckpoint.target, ethers.parseEther("1.5"));
             await I_PolyToken.connect(token_owner).getTokens(ethers.parseEther("1.5"), token_owner.address);
             // transfer approved in above test

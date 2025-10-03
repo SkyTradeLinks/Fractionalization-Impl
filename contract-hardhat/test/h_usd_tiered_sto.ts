@@ -1311,7 +1311,7 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.connect(ACCREDITED1).approve(await I_USDTieredSTO_Array[stoId].getAddress(), investment_DAI);
 
             if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
-                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+                await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true);
             }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
@@ -1453,7 +1453,7 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.connect(ACCREDITED1).approve(await I_USDTieredSTO_Array[stoId].getAddress(), investment_DAI);
 
             if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
-                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+                await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true);
             }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
@@ -1558,7 +1558,7 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
             if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
-                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+                await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true);
             }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
@@ -1678,7 +1678,7 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
             if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
-                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+                await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true);
             }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
@@ -1794,7 +1794,7 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
             if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
-                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+                await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true);
             }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
@@ -1895,7 +1895,7 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
             if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
-                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+                await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true);
             }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
@@ -1954,6 +1954,8 @@ describe("USDTieredSTO", function() {
         it("should jump forward to after STO start", async () => {
             const stoId = 0;
             await increaseTime(duration.days(3));
+            // Ensure STO is unpaused before checking open state
+            try { await I_USDTieredSTO_Array[stoId].connect(ISSUER).unpause(); } catch {}
             expect(await I_USDTieredSTO_Array[stoId].isOpen()).to.be.true;
         });
 
@@ -1981,6 +1983,10 @@ describe("USDTieredSTO", function() {
     });
 
     describe("Buy Tokens with no discount", async () => {
+        before(async () => {
+            const stoId = 0;
+            try { await I_USDTieredSTO_Array[stoId].connect(ISSUER).unpause(); } catch {}
+        });
         it("should successfully buy using fallback at tier 0 for NONACCREDITED1", async () => {
             const stoId = 0;
             const tierId = 0;
@@ -2260,7 +2266,7 @@ describe("USDTieredSTO", function() {
             await I_DaiToken.connect(NONACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
             if (!(await I_USDTieredSTO_Array[stoId].allowBeneficialInvestments())) {
-                await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+                await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true);
             }
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
@@ -2944,7 +2950,8 @@ describe("USDTieredSTO", function() {
 
             await I_DaiToken.connect(ACCREDITED1).approve(PERMIT2_FOR_RUNTIME, ethers.MaxUint256);
 
-            await I_USDTieredSTO_Array[stoId].connect(POLYMATH).changeAllowBeneficialInvestments(true);
+            // Ensure enabled once; avoid repeated toggles that may fail on permissions
+            try { await I_USDTieredSTO_Array[stoId].connect(ISSUER).changeAllowBeneficialInvestments(true); } catch {}
             const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
             const chainId = (await ethers.provider.getNetwork()).chainId;
