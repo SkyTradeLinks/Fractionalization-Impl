@@ -14,7 +14,7 @@ import Web3 from "web3";
 const web3 = new Web3("http://localhost:8545"); // Hardcoded development port
 
 // Use ultra-low gas price under coverage to avoid massive upfront cost due to instrumentation
-const GAS_PRICE = (process.env.SOLIDITY_COVERAGE === "true" || process.env.COVERAGE === "true") ? 1n : 10000000000n; // 10 GWEI
+const GAS_PRICE = (process.env.SOLIDITY_COVERAGE === "true" || process.env.COVERAGE === "true") ? 7n : 10000000000n; // 10 GWEI
 
 
 //const TOLERANCE = 2; // Allow balances to be off by 2 WEI for rounding purposes
