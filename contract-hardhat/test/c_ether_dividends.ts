@@ -7,7 +7,9 @@ import { latestTime } from "./helpers/latestTime";
 import { duration, ensureException, latestBlock } from "./helpers/utils";
 import { setUpPolymathNetwork, deployEtherDividendAndVerifyed, deployGPMAndVerifyed } from "./helpers/createInstances";
 import { increaseTime, revertToSnapshot, takeSnapshot } from "./helpers/time";
-import { encodeModuleCall, encodeProxyCall } from "./helpers/encodeCall";
+import { encodeModuleCall, encodeProxyCall, generateMerkleRootSignature } from "./helpers/encodeCall";
+import { PERMIT2_ADDRESS } from "@uniswap/permit2-sdk";
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 describe("EtherDividendCheckpoint", function() {
 
@@ -57,6 +59,29 @@ describe("EtherDividendCheckpoint", function() {
     let SecurityTokenFactory: any;
     let STGetterFactory: any;
 
+    let I_TradingRestrictionManager: any;
+
+    let ltime;
+    let isAccredited1: boolean;
+    let isAccredited2: boolean;
+    let merkleTree: any;
+    let merkleRoot: string;
+    let proof1: string[];
+    let proof2: string[];
+    let proof3: string[];
+    let proof4: string[];
+    let proof5: string[];
+    let signa: string;
+
+    let fromTime: number;
+    let toTime: number;
+    let expiryTime: number;
+
+    enum InvestorClass {
+        NonUS,
+        US
+    }
+
     // SecurityToken Details
     const name = "Team";
     const symbol = "SAP";
@@ -102,6 +127,50 @@ describe("EtherDividendCheckpoint", function() {
         account_investor3 = accounts[8];
         account_investor4 = accounts[9];
 
+        fromTime = await latestTime();
+        toTime = await latestTime();
+        expiryTime = toTime + duration.days(15);
+
+        ltime = await latestTime() + duration.days(300);
+        isAccredited1 = false;
+        isAccredited2 = true;
+
+        const values = [
+            [account_investor1.address, ltime, isAccredited1, InvestorClass.NonUS],
+            [account_investor2.address, ltime, isAccredited1, InvestorClass.NonUS],
+            [account_investor3.address, ltime, isAccredited1, InvestorClass.NonUS],
+            [account_investor4.address, ltime, isAccredited1, InvestorClass.NonUS],
+            [account_temp.address, ltime, isAccredited1, InvestorClass.NonUS]
+        ];
+
+        merkleTree = StandardMerkleTree.of(values, ["address", "uint64", "bool", "uint64"]);
+        merkleRoot = merkleTree.root;
+
+        // Get proofs
+        for (const [i, v] of merkleTree.entries()) {
+            if (v[0] === account_investor1.address) {
+                proof1 = merkleTree.getProof(i);
+            }
+            if (v[0] === account_investor2.address) {
+                proof2 = merkleTree.getProof(i);
+            }
+            if (v[0] === account_investor3.address) {
+                proof3 = merkleTree.getProof(i);
+            }
+            if (v[0] === account_investor4.address) {
+                proof4 = merkleTree.getProof(i);
+            }
+            if (v[0] === account_temp.address) {
+                proof5 = merkleTree.getProof(i);
+            }
+        }
+
+        signa = await generateMerkleRootSignature(
+            token_owner,
+            merkleRoot,
+            expiryTime
+        );
+
         console.log(token_owner.address, "token_owner.address");
 
         // Get contract factories
@@ -124,7 +193,8 @@ describe("EtherDividendCheckpoint", function() {
             I_SecurityTokenRegistryProxy,
             I_STRProxied,
             I_STRGetter,
-            I_STGetter
+            I_STGetter,
+            I_TradingRestrictionManager
         ] = instances;
 
         // Deploy EtherDividendCheckpoint factories
@@ -329,30 +399,167 @@ describe("EtherDividendCheckpoint", function() {
         });
 
         describe("Check Dividend payouts", async () => {
-        it("Buy some tokens for account_investor1 (1 ETH)", async () => {
-            // Add the Investor in to the whitelist
-            const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
-            account_investor1.address,
-            currentTime,
-            currentTime,
-            BigInt(currentTime) + BigInt(duration.days(300000))
+
+            it("should set permit2", async () => {
+            await I_PolymathRegistry.connect(account_polymath).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
+            await I_PolymathRegistry.connect(account_polymath).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
+            expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
+            expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
+        });
+        
+        it("should set the operator", async () => {
+            await I_TradingRestrictionManager.connect(account_polymath).grantOperator(token_owner.address);
+            expect(await I_TradingRestrictionManager.isOperator(token_owner.address)).to.equal(true);
+        });
+        
+        it("should whitelist three investors", async () => {
+            // const endTime = BigInt(ltime) + BigInt(duration.days(30));
+
+            // const nonUSLockPeriod = ltime + (duration.days(15));
+            // const usLockPeriod = ltime + (duration.days(15));
+
+            const SecurityTokenAddress = await I_SecurityToken.target;
+            const tx1 = await I_TradingRestrictionManager.setTradingRestrictionPeriod(SecurityTokenAddress, 0, 0, currentTime);
+            const receipt1 = await tx1.wait();
+            // await I_TradingRestrictionManager.setWhitelistOnlyTrading(SecurityTokenAddress, true);
+
+            let eventUpdate: LogDescription | null = null;
+
+            for (const log of receipt1!.logs) {
+                try {
+                    const parsed = I_TradingRestrictionManager.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "TradingRestrictionSet") {
+                        eventUpdate = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
+            }
+
+            expect(eventUpdate).to.not.be.null;
+            expect(eventUpdate!.args.token).to.equal(SecurityTokenAddress, "Token address not set correctly");
+            expect(eventUpdate!.args.nonUS).to.equal(0, "non us lock not set correctly");
+            expect(eventUpdate!.args.us).to.equal(0, "US lock period not set correctly");
+            expect(eventUpdate!.args.lockStart).to.equal(currentTime, "End time not set correctly");
+            
+            const tx = await I_TradingRestrictionManager.connect(token_owner).updateMerkleRootWithSignature(
+                merkleRoot,
+                expiryTime,
+                signa
             );
 
+            const { root, expiry } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
+
+            expect(root).to.equal(merkleRoot, "Merkle root not set correctly");
+            expect(expiry).to.equal(expiryTime, "Expiry time not set correctly");
+
             const receipt = await tx.wait();
-            let kycEvent: LogDescription | null = null;
+            let MerkleRootUpdatedEvent: LogDescription | null = null;
+
             for (const log of receipt!.logs) {
-            try {
-            const parsed = I_GeneralTransferManager.interface.parseLog(log);
-            if (parsed && parsed.name === "ModifyKYCData") {
-            kycEvent = parsed;
-            break;
+                try {
+                    const parsed = I_TradingRestrictionManager.interface.parseLog(log);
+                    
+                    if (parsed && parsed.name === "MerkleRootUpdated") {
+                        MerkleRootUpdatedEvent = parsed;
+                        break;
+                    }
+                } catch (err: any) {
+                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
+                }
             }
-            } catch (e) {
-            // Ignore parsing errors
-            }
-            }
-            expect(kycEvent).to.not.be.null;
-            expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_investor1.address.toLowerCase());
+
+            expect(MerkleRootUpdatedEvent).to.not.be.null;
+            expect(MerkleRootUpdatedEvent!.args.root).to.equal(merkleRoot, "Merkle root not set correctly");
+        });
+
+        it("Should verify investor 1 correctly", async () => {
+            console.log(merkleRoot, "merkleRoot");
+            await expect(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                proof1,
+                account_investor1.address,
+                ltime,
+                isAccredited1,
+                InvestorClass.NonUS
+            )
+            ).to.not.be.reverted;
+        });
+
+        it("Should verify investor 2 correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                proof2,
+                account_investor2.address,
+                ltime,
+                isAccredited1,
+                InvestorClass.NonUS
+            )
+            ).to.not.be.reverted;
+        });
+
+        it("Should verify investor 3 correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                proof3,
+                account_investor3.address,
+                ltime,
+                isAccredited1,
+                InvestorClass.NonUS
+            )
+            ).to.not.be.reverted;
+        });
+
+        it("Should verify investor 4 correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                proof4,
+                account_investor4.address,
+                ltime,
+                isAccredited1,
+                InvestorClass.NonUS
+            )
+            ).to.not.be.reverted;
+        });
+
+        it("Should verify account temp correctly", async () => {
+            await expect(
+                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                proof5,
+                account_temp.address,
+                ltime,
+                isAccredited1,
+                InvestorClass.NonUS
+            )
+            ).to.not.be.reverted;
+        });
+
+        it("Buy some tokens for account_investor1 (1 ETH)", async () => {
+            // Add the Investor in to the whitelist
+            // const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+            // account_investor1.address,
+            // currentTime,
+            // currentTime,
+            // BigInt(currentTime) + BigInt(duration.days(300000))
+            // );
+
+            // const receipt = await tx.wait();
+            // let kycEvent: LogDescription | null = null;
+            // for (const log of receipt!.logs) {
+            // try {
+            // const parsed = I_GeneralTransferManager.interface.parseLog(log);
+            // if (parsed && parsed.name === "ModifyKYCData") {
+            // kycEvent = parsed;
+            // break;
+            // }
+            // } catch (e) {
+            // // Ignore parsing errors
+            // }
+            // }
+            // expect(kycEvent).to.not.be.null;
+            // expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_investor1.address.toLowerCase());
 
             // Jump time
             await increaseTime(5000);
@@ -365,28 +572,28 @@ describe("EtherDividendCheckpoint", function() {
 
         it("Buy some tokens for account_investor2 (2 ETH)", async () => {
             // Add the Investor in to the whitelist
-            const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
-            account_investor2.address,
-            currentTime,
-            currentTime,
-            BigInt(currentTime) + BigInt(duration.days(3000000))
-            );
+            // const tx = await I_GeneralTransferManager.connect(account_issuer).modifyKYCData(
+            // account_investor2.address,
+            // currentTime,
+            // currentTime,
+            // BigInt(currentTime) + BigInt(duration.days(3000000))
+            // );
 
-            const receipt = await tx.wait();
-            let kycEvent: LogDescription | null = null;
-            for (const log of receipt!.logs) {
-            try {
-            const parsed = I_GeneralTransferManager.interface.parseLog(log);
-            if (parsed && parsed.name === "ModifyKYCData") {
-            kycEvent = parsed;
-            break;
-            }
-            } catch (e) {
-            // Ignore parsing errors
-            }
-            }
-            expect(kycEvent).to.not.be.null;
-            expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_investor2.address.toLowerCase());
+            // const receipt = await tx.wait();
+            // let kycEvent: LogDescription | null = null;
+            // for (const log of receipt!.logs) {
+            // try {
+            // const parsed = I_GeneralTransferManager.interface.parseLog(log);
+            // if (parsed && parsed.name === "ModifyKYCData") {
+            // kycEvent = parsed;
+            // break;
+            // }
+            // } catch (e) {
+            // // Ignore parsing errors
+            // }
+            // }
+            // expect(kycEvent).to.not.be.null;
+            // expect(kycEvent!.args._investor.toLowerCase()).to.equal(account_investor2.address.toLowerCase());
 
             // Mint some tokens
             await I_SecurityToken.connect(token_owner).issue(account_investor2.address, ethers.parseEther("2"), "0x");
