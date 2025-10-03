@@ -127,7 +127,7 @@ describe("Checkpoints", function() {
         
         fromTime = await latestTime();
         toTime = await latestTime();
-        expiryTime = toTime + duration.days(15);
+        expiryTime = toTime + duration.days(30);
         
         // Accounts setup
         account_polymath = accounts[0];
@@ -141,9 +141,9 @@ describe("Checkpoints", function() {
 
         fromTime = await latestTime();
         toTime = await latestTime();
-        expiryTime = toTime + duration.days(15);
+        expiryTime = toTime + duration.days(500);
 
-        ltime = await latestTime() + duration.days(300);
+        ltime = await latestTime() + duration.days(1000);
         isAccredited1 = false;
         isAccredited2 = true;
 
@@ -394,7 +394,7 @@ describe("Checkpoints", function() {
         it("Should verify investor 1 correctly", async () => {
             console.log(merkleRoot, "merkleRoot");
             await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                I_TradingRestrictionManager.connect(account_investor1).verifyInvestor(
                 proof1,
                 account_investor1.address,
                 ltime,
@@ -418,7 +418,7 @@ describe("Checkpoints", function() {
 
         it("Should verify investor 3 correctly", async () => {
             await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                I_TradingRestrictionManager.connect(account_investor3).verifyInvestor(
                 proof3,
                 account_investor3.address,
                 ltime,
@@ -430,7 +430,7 @@ describe("Checkpoints", function() {
 
         it("Should verify investor 4 correctly", async () => {
             await expect(
-                I_TradingRestrictionManager.connect(token_owner).verifyInvestor(
+                I_TradingRestrictionManager.connect(account_investor4).verifyInvestor(
                 proof4,
                 account_investor4.address,
                 ltime,
@@ -594,6 +594,7 @@ describe("Checkpoints", function() {
                 console.log("Checkpoint Times: " + checkpointTimes.map(t => t.toString()));
                 
                 const txs = Math.floor(Math.random() * 3);
+                console.log("Performing " + txs + " random transactions");
                 for (let i = 0; i < txs; i++) {
                     let sender: HardhatEthersSigner;
                     let receiver: HardhatEthersSigner;
@@ -624,6 +625,11 @@ describe("Checkpoints", function() {
                         amount = (senderBalance * BigInt(m)) / BigInt(10);
                     }
                     console.log("Sender: " + sender.address + " Receiver: " + receiver.address + " Amount: " + amount.toString());
+                    if (sender.address === receiver.address) continue; // Skip self-transfer
+                    if (amount === 0n) continue; // Skip zero-value transfer
+                    const senderBalance = await I_SecurityToken.balanceOf(sender.address);
+                    console.log("Sender balance: " + senderBalance.toString());
+                    if (senderBalance === 0n) continue; 
                     await I_SecurityToken.connect(sender).transfer(receiver.address, amount);
                 }
                 

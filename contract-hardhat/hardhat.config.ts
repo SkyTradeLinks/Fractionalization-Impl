@@ -53,7 +53,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       // This is the crucial part
       forking: {
-        url: "", // Your RPC URL
+        url: "https://eth-mainnet.g.alchemy.com/v2/gdtMvd4B_EHr9MjU63dPbo0yvWqOQXE_", // Your RPC URL
         // Optional: pin the block number for consistent tests
         blockNumber: 19000000
       },

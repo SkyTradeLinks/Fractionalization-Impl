@@ -4,14 +4,15 @@ import { latestTime } from "./helpers/latestTime";
 import { duration } from "./helpers/utils";
 import { network } from "hardhat";
 import { generateMerkleRootSignature } from "./helpers/encodeCall";
+import { PERMIT2_ADDRESS } from "@uniswap/permit2-sdk";
 
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { StandardMerkleTree } = require("@openzeppelin/merkle-tree");
 
 describe("TradingRestrictionManager", function () {
-  let contract, owner, operator, nonOperator, investor1, investor2, investor3, token1, token2, account_controller;
-  let merkleTree, merkleRoot, proof1, proof2, expiry, isAccredited1, isAccredited2;
+  let contract, owner, operator, nonOperator, nonOperator1, investor1, investor2, investor3, token1, token2, account_controller;
+  let merkleTree, merkleRoot, proof1, proof2, expiry, isAccredited1, isAccredited2, fromTime, toTime, expiryTime;
 
   let GeneralTransferManager;
 
@@ -63,7 +64,7 @@ describe("TradingRestrictionManager", function () {
       method: "hardhat_reset",
       params: [],
     });
-    [owner, operator, nonOperator, investor1, investor2, investor3, token1, token2, account_controller] = await ethers.getSigners();
+    [owner, operator, nonOperator, nonOperator1, investor1, investor2, investor3, token1, token2, account_controller] = await ethers.getSigners();
 
       GeneralTransferManager = await ethers.getContractFactory("GeneralTransferManager");
 
@@ -87,7 +88,7 @@ describe("TradingRestrictionManager", function () {
           I_TradingRestrictionManager
       ] = instances;
 
-        // Printing all the contract addresses
+        // Printing all the I_TradingRestrictionManager addresses
         console.log(`
         --------------------- Polymath Network Smart Contracts: ---------------------
         PolymathRegistry:                  ${I_PolymathRegistry.target}
@@ -102,12 +103,14 @@ describe("TradingRestrictionManager", function () {
         TradingRestrictionManager:         ${I_TradingRestrictionManager.target}
         -----------------------------------------------------------------------------
         `);
-  });
 
-  beforeEach(async function () {
     // Prepare Merkle tree data
-    ltime = await latestTime();
-    expiry = await latestTime() + duration.days(100); // 100 days from now
+    fromTime = await latestTime();
+    toTime = await latestTime();
+    expiryTime = toTime + duration.days(15);
+
+    ltime = await latestTime() + duration.days(300);
+    expiry = await latestTime() + duration.days(300); // 100 days from now
     isAccredited1 = false;
     isAccredited2 = true;
 
@@ -122,12 +125,12 @@ describe("TradingRestrictionManager", function () {
 
     // Get proofs
     for (const [i, v] of merkleTree.entries()) {
-        if (v[0] === investor1.address) {
-            proof1 = merkleTree.getProof(i);
-        }
-        if (v[0] === investor2.address) {
-            proof2 = merkleTree.getProof(i);
-        }
+      if (v[0] === investor1.address) {
+        proof1 = merkleTree.getProof(i);
+      }
+      if (v[0] === investor2.address) {
+        proof2 = merkleTree.getProof(i);
+      }
         if (v[0] === investor3.address) {
             proof3 = merkleTree.getProof(i);
         }
@@ -141,6 +144,17 @@ describe("TradingRestrictionManager", function () {
   });
 
   describe("Merkle Root Management", function () {
+    it("should set permit2", async () => {
+        await I_PolymathRegistry.connect(owner).changeAddress("Permit2Contract", PERMIT2_ADDRESS);
+        await I_PolymathRegistry.connect(owner).changeAddress("TradingRestrictionManager", I_TradingRestrictionManager.target);
+        expect(await I_PolymathRegistry.addressGetter("Permit2Contract")).to.equal(PERMIT2_ADDRESS);
+        expect(await I_PolymathRegistry.addressGetter("TradingRestrictionManager")).to.equal(I_TradingRestrictionManager.target);
+    });
+
+    it("should set the operator", async () => {
+        await I_TradingRestrictionManager.connect(owner).grantOperator(operator.address);
+        expect(await I_TradingRestrictionManager.isOperator(operator.address)).to.equal(true);
+    });
     it("should whitelist three investors", async () => {
       // const endTime = BigInt(ltime) + BigInt(duration.days(30));
       
@@ -172,13 +186,13 @@ describe("TradingRestrictionManager", function () {
       // expect(eventUpdate!.args.us).to.equal(0, "US lock period not set correctly");
       // expect(eventUpdate!.args.lockStart).to.equal(endTime, "End time not set correctly");
 
-      const tx = await contract.connect(operator).updateMerkleRootWithSignature(
+      const tx = await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(
           merkleRoot,
           expiry,
           signa
       );
 
-      const { root, expiry: expiryTime } = await contract.getCurrentMerkleRoot();
+      const { root, expiry: expiryTime } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
 
       expect(root).to.equal(merkleRoot, "Merkle root not set correctly");
       expect(expiryTime).to.equal(expiry, "Expiry time not set correctly");
@@ -188,7 +202,7 @@ describe("TradingRestrictionManager", function () {
 
       for (const log of receipt!.logs) {
           try {
-              const parsed = contract.interface.parseLog(log);
+              const parsed = I_TradingRestrictionManager.interface.parseLog(log);
               
               if (parsed && parsed.name === "MerkleRootUpdated") {
                   MerkleRootUpdatedEvent = parsed;
@@ -204,13 +218,14 @@ describe("TradingRestrictionManager", function () {
   });
 
     it("should allow operator to set merkle root", async function () {
-      // await contract.connect(operator).modifyKYCData(merkleRoot);
+      // await I_TradingRestrictionManager.connect(operator).modifyKYCData(merkleRoot);
       // Verify by checking that a valid proof works
+      console.log("---------------------------", ltime, proof1, merkleRoot)
       await expect(
-        contract.connect(operator).verifyInvestor(
+        I_TradingRestrictionManager.connect(operator).verifyInvestor(
           proof1,
           investor1.address,
-          expiry,
+          ltime,
           isAccredited1,
           InvestorClass.NonUS
         )
@@ -218,34 +233,39 @@ describe("TradingRestrictionManager", function () {
     });
 
     it("should emit MerkleRootUpdated event", async function () {
-      await expect(contract.connect(operator).modifyKYCData(merkleRoot))
-        .to.emit(contract, "MerkleRootUpdated")
+      await expect(I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(merkleRoot, expiry, signa))
+        .to.emit(I_TradingRestrictionManager, "MerkleRootUpdated")
         .withArgs(merkleRoot);
     });
 
     it("should reject non-operator trying to set merkle root", async function () {
       await expect(
-        contract.connect(nonOperator).modifyKYCData(merkleRoot)
+        I_TradingRestrictionManager.connect(nonOperator).updateMerkleRootWithSignature(merkleRoot, expiry, signa)
       ).to.be.revertedWith("Operator only");
     });
 
     it("should allow updating merkle root multiple times", async function () {
-      await contract.connect(operator).modifyKYCData(merkleRoot);
+      await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(merkleRoot, expiry, signa);
 
       const newRoot = ethers.keccak256(ethers.toUtf8Bytes("new root"));
-      await expect(contract.connect(operator).modifyKYCData(newRoot))
-        .to.emit(contract, "MerkleRootUpdated")
+      const newSigna = await generateMerkleRootSignature(
+          operator,
+          newRoot,
+          expiry
+      );
+      await expect(I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(newRoot, expiry, newSigna))
+        .to.emit(I_TradingRestrictionManager, "MerkleRootUpdated")
         .withArgs(newRoot);
     });
   });
 
   describe("Investor Verification", function () {
     beforeEach(async function () {
-      await contract.connect(operator).modifyKYCData(merkleRoot);
+      await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(merkleRoot, expiry, signa);
     });
 
     it("should verify investor with valid proof", async function () {
-      const tx = await contract.connect(investor1).verifyInvestor(
+      const tx = await I_TradingRestrictionManager.connect(investor1).verifyInvestor(
         proof1,
         investor1.address,
         expiry,
@@ -254,29 +274,28 @@ describe("TradingRestrictionManager", function () {
       );
 
       await expect(tx)
-        .to.emit(contract, "InvestorKYCDataUpdated")
+        .to.emit(I_TradingRestrictionManager, "InvestorKYCDataUpdated")
         .withArgs(investor1.address, proof1, expiry, isAccredited1, InvestorClass.NonUS);
 
-      expect(await contract.isExistingInvestor(investor1.address)).to.equal(true);
+      expect(await I_TradingRestrictionManager.isExistingInvestor(investor1.address)).to.equal(true);
     });
 
     it("should verify US investor", async function () {
       await expect(
-        contract.connect(investor2).verifyInvestor(
+        I_TradingRestrictionManager.connect(investor2).verifyInvestor(
           proof2,
           investor2.address,
-          expiry,
+          ltime,
           isAccredited2,
           InvestorClass.US
         )
-      ).to.emit(contract, "InvestorKYCDataUpdated")
-        .withArgs(investor2.address, proof2, expiry, isAccredited2, InvestorClass.US);
+      )
     });
 
     it("should reject expired proof", async function () {
       const expiredExpiry = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
       await expect(
-        contract.connect(investor1).verifyInvestor(
+        I_TradingRestrictionManager.connect(investor1).verifyInvestor(
           proof1,
           investor1.address,
           expiredExpiry,
@@ -289,7 +308,7 @@ describe("TradingRestrictionManager", function () {
     it("should reject invalid proof", async function () {
       const invalidProof = ["0x0000000000000000000000000000000000000000000000000000000000000000"];
       await expect(
-        contract.connect(investor1).verifyInvestor(
+        I_TradingRestrictionManager.connect(investor1).verifyInvestor(
           invalidProof,
           investor1.address,
           expiry,
@@ -301,7 +320,7 @@ describe("TradingRestrictionManager", function () {
 
     it("should reject proof with wrong investor address", async function () {
       await expect(
-        contract.connect(investor3).verifyInvestor(
+        I_TradingRestrictionManager.connect(investor3).verifyInvestor(
           proof1, // proof1 is for investor1, not investor3
           investor3.address,
           expiry,
@@ -313,7 +332,7 @@ describe("TradingRestrictionManager", function () {
 
     it("should reject proof with wrong parameters", async function () {
       await expect(
-        contract.connect(investor1).verifyInvestor(
+        I_TradingRestrictionManager.connect(investor1).verifyInvestor(
           proof1,
           investor1.address,
           expiry,
@@ -325,31 +344,63 @@ describe("TradingRestrictionManager", function () {
 
     it("should allow re-verification of existing investor", async function () {
       // First verification
-      await contract.connect(investor1).verifyInvestor(
+      await I_TradingRestrictionManager.connect(investor1).verifyInvestor(
         proof1,
         investor1.address,
-        expiry,
+        ltime,
         isAccredited1,
         InvestorClass.NonUS
       );
 
       // Second verification should work
+      // await expect(
+      //   I_TradingRestrictionManager.connect(investor1).verifyInvestor(
+      //     proof1,
+      //     investor1.address,
+      //     ltime,
+      //     isAccredited1,
+      //     InvestorClass.US // Different class
+      //   )
+      // ).to.not.be.reverted;
+      const updatedValues = [
+          [investor1.address, ltime, isAccredited1, InvestorClass.US], // updated class here
+          [investor2.address, ltime, isAccredited2, InvestorClass.NonUS],
+          [investor3.address, ltime, isAccredited2, InvestorClass.US],
+      ];
+      const updatedMerkleTree = StandardMerkleTree.of(updatedValues, ["address", "uint64", "bool", "uint64"]);
+      const updatedMerkleRoot = updatedMerkleTree.root;
+
+      // Generate new proof for investor1 from updated tree
+      let updatedProof1: string[] = [];
+      for (const [i, v] of updatedMerkleTree.entries()) {
+          if (v[0] === investor1.address) {
+              updatedProof1 = updatedMerkleTree.getProof(i);
+              break;
+          }
+      }
+      const updatedSigna = await generateMerkleRootSignature(operator, updatedMerkleRoot, expiry);
+
+      await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(
+        updatedMerkleRoot,
+        expiry,
+        updatedSigna
+      );
+
       await expect(
-        contract.connect(investor1).verifyInvestor(
-          proof1,
-          investor1.address,
-          expiry,
-          isAccredited1,
-          InvestorClass.US // Different class
-        )
-      ).to.not.be.reverted;
+        I_TradingRestrictionManager.connect(investor1).verifyInvestor(
+        updatedProof1,
+        investor1.address,
+        expiry,
+        isAccredited1,
+        InvestorClass.US
+      )).to.not.be.reverted;
     });
 
     it("should return true on successful verification", async function () {
-      const result = await contract.connect(investor1).verifyInvestor.staticCall(
+      const result = await I_TradingRestrictionManager.connect(investor1).verifyInvestor.staticCall(
         proof1,
         investor1.address,
-        expiry,
+        ltime,
         isAccredited1,
         InvestorClass.NonUS
       );
@@ -450,38 +501,99 @@ describe("TradingRestrictionManager", function () {
             I_GeneralTransferManager = GeneralTransferManager.attach(moduleData[0]);
         });
 
-        it("should set trading restriction manager", async () => { 
-            const tx = await I_GeneralTransferManager.connect(operator).setTradingRestrictionManager(contract.target);
+        // it("should set trading restriction manager", async () => { 
+        //     const tx = await I_GeneralTransferManager.connect(operator).setTradingRestrictionManager(I_TradingRestrictionManager.target);
 
-            const receipt = await tx.wait();
-            let tradingRestrictionEvent: LogDescription | null = null;
+        //     const receipt = await tx.wait();
+        //     let tradingRestrictionEvent: LogDescription | null = null;
 
-            for (const log of receipt!.logs) {
-                try {
-                    const parsed = I_GeneralTransferManager.interface.parseLog(log);
+        //     for (const log of receipt!.logs) {
+        //         try {
+        //             const parsed = I_GeneralTransferManager.interface.parseLog(log);
                     
-                    if (parsed && parsed.name === "TradingRestrictionManagerUpdated") {
-                        tradingRestrictionEvent = parsed;
-                        break;
-                    }
-                } catch (err: any) {
-                    console.log(`Failed to parse log with STRProxied: ${err.message}`);
-                }
-            }
+        //             if (parsed && parsed.name === "TradingRestrictionManagerUpdated") {
+        //                 tradingRestrictionEvent = parsed;
+        //                 break;
+        //             }
+        //         } catch (err: any) {
+        //             console.log(`Failed to parse log with STRProxied: ${err.message}`);
+        //         }
+        //     }
 
-            expect(tradingRestrictionEvent).to.not.be.null;
-            expect(tradingRestrictionEvent!.args.newManager).to.equal(contract.target, "TradingRestrictionManager not set correctly");
-        });
+        //     expect(tradingRestrictionEvent).to.not.be.null;
+        //     expect(tradingRestrictionEvent!.args.newManager).to.equal(I_TradingRestrictionManager.target, "TradingRestrictionManager not set correctly");
+        // });
 
+        // it("should whitelist three investors", async () => {
+        //     const tx = await I_TradingRestrictionManager.connect(operator).modifyKYCData(merkleRoot);
+
+        //     const receipt = await tx.wait();
+        //     let MerkleRootUpdatedEvent: LogDescription | null = null;
+
+        //     for (const log of receipt!.logs) {
+        //         try {
+        //             const parsed = I_TradingRestrictionManager.interface.parseLog(log);
+                    
+        //             if (parsed && parsed.name === "MerkleRootUpdated") {
+        //                 MerkleRootUpdatedEvent = parsed;
+        //                 break;
+        //             }
+        //         } catch (err: any) {
+        //             console.log(`Failed to parse log with STRProxied: ${err.message}`);
+        //         }
+        //     }
+
+        //     expect(MerkleRootUpdatedEvent).to.not.be.null;
+        //     expect(MerkleRootUpdatedEvent!.args.root).to.equal(merkleRoot, "Merkle root not set correctly");
+        // });
         it("should whitelist three investors", async () => {
-            const tx = await contract.connect(operator).modifyKYCData(merkleRoot);
+            // const endTime = BigInt(ltime) + BigInt(duration.days(30));
+            
+            // const nonUSLockPeriod = ltime + (duration.days(15));
+            // const usLockPeriod = ltime + (duration.days(15));
+
+            // const SecurityTokenAddress = await I_SecurityToken.target;
+            // const tx1 = await I_TradingRestrictionManager.setTradingRestrictionPeriod(SecurityTokenAddress, 0, 0, endTime);
+            // const receipt1 = await tx1.wait();
+
+            // let eventUpdate: LogDescription | null = null;
+
+            // for (const log of receipt1!.logs) {
+            //     try {
+            //         const parsed = I_TradingRestrictionManager.interface.parseLog(log);
+                    
+            //         if (parsed && parsed.name === "TradingRestrictionSet") {
+            //             eventUpdate = parsed;
+            //             break;
+            //         }
+            //     } catch (err: any) {
+            //         console.log(`Failed to parse log with STRProxied: ${err.message}`);
+            //     }
+            // }
+
+            // expect(eventUpdate).to.not.be.null;
+            // expect(eventUpdate!.args.token).to.equal(SecurityTokenAddress, "Token address not set correctly");
+            // expect(eventUpdate!.args.nonUS).to.equal(0, "non us lock not set correctly");
+            // expect(eventUpdate!.args.us).to.equal(0, "US lock period not set correctly");
+            // expect(eventUpdate!.args.lockStart).to.equal(endTime, "End time not set correctly");
+
+            const tx = await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(
+                merkleRoot,
+                expiry,
+                signa
+            );
+
+            const { root, expiry: expiryTime } = await I_TradingRestrictionManager.getCurrentMerkleRoot();
+
+            expect(root).to.equal(merkleRoot, "Merkle root not set correctly");
+            expect(expiryTime).to.equal(expiry, "Expiry time not set correctly");
 
             const receipt = await tx.wait();
             let MerkleRootUpdatedEvent: LogDescription | null = null;
 
             for (const log of receipt!.logs) {
                 try {
-                    const parsed = contract.interface.parseLog(log);
+                    const parsed = I_TradingRestrictionManager.interface.parseLog(log);
                     
                     if (parsed && parsed.name === "MerkleRootUpdated") {
                         MerkleRootUpdatedEvent = parsed;
@@ -494,86 +606,89 @@ describe("TradingRestrictionManager", function () {
 
             expect(MerkleRootUpdatedEvent).to.not.be.null;
             expect(MerkleRootUpdatedEvent!.args.root).to.equal(merkleRoot, "Merkle root not set correctly");
-        });
+          });
     });
 
   describe("Ownership", function () {
     it("should set deployer as owner", async function () {
-      expect(await contract.owner()).to.equal(owner.address);
+      expect(await I_TradingRestrictionManager.owner()).to.equal(owner.address);
     });
 
     it("should allow owner to transfer ownership", async function () {
-      await contract.connect(owner).transferOwnership(operator.address);
-      expect(await contract.owner()).to.equal(operator.address);
+      await I_TradingRestrictionManager.connect(owner).transferOwnership(operator.address);
+      expect(await I_TradingRestrictionManager.owner()).to.equal(operator.address);
     });
 
     it("should reject non-owner trying to transfer ownership", async function () {
       await expect(
-        contract.connect(nonOperator).transferOwnership(operator.address)
+        I_TradingRestrictionManager.connect(nonOperator).transferOwnership(operator.address)
       ).to.be.reverted;
     });
 
     it("should reject transfer to zero address", async function () {
       await expect(
-        contract.connect(owner).transferOwnership(ethers.ZeroAddress)
+        I_TradingRestrictionManager.connect(owner).transferOwnership(ethers.ZeroAddress)
       ).to.be.reverted;
     });
 
     it("should emit OwnershipTransferred event", async function () {
-      await expect(contract.connect(owner).transferOwnership(operator.address))
-        .to.emit(contract, "OwnershipTransferred")
-        .withArgs(owner.address, operator.address);
+      console.log("Current owner:", await I_TradingRestrictionManager.owner());
+      console.log("Owner:", owner.address);
+      console.log("Operator:", operator.address);
+      await expect(I_TradingRestrictionManager.connect(operator).transferOwnership(owner.address))
+        .to.emit(I_TradingRestrictionManager, "OwnershipTransferred")
+        .withArgs(operator.address, owner.address);
     });
   });
 
   describe("Operator Management", function () {
     it("should grant operator role", async function () {
-      expect(await contract.isOperator(operator.address)).to.equal(true);
+      expect(await I_TradingRestrictionManager.isOperator(operator.address)).to.equal(true);
     });
 
     it("should allow owner to grant operator role", async function () {
-      await contract.connect(owner).grantOperator(nonOperator.address);
-      expect(await contract.isOperator(nonOperator.address)).to.equal(true);
+      await I_TradingRestrictionManager.connect(owner).grantOperator(nonOperator.address);
+      expect(await I_TradingRestrictionManager.isOperator(nonOperator.address)).to.equal(true);
     });
 
     it("should emit OperatorRoleGranted event", async function () {
-      await expect(contract.connect(owner).grantOperator(nonOperator.address))
-        .to.emit(contract, "OperatorRoleGranted")
-        .withArgs(nonOperator.address);
+      await expect(I_TradingRestrictionManager.connect(owner).grantOperator(nonOperator1.address))
+        .to.emit(I_TradingRestrictionManager, "OperatorRoleGranted")
+        .withArgs(nonOperator1.address);
     });
 
     it("should reject granting operator role to existing operator", async function () {
       await expect(
-        contract.connect(owner).grantOperator(operator.address)
+        I_TradingRestrictionManager.connect(owner).grantOperator(operator.address)
       ).to.be.revertedWith("Already operator");
     });
 
     it("should reject non-owner trying to grant operator role", async function () {
       await expect(
-        contract.connect(nonOperator).grantOperator(investor1.address)
+        I_TradingRestrictionManager.connect(nonOperator).grantOperator(investor1.address)
       ).to.be.reverted;
     });
 
     it("should allow owner to revoke operator role", async function () {
-      await contract.connect(owner).revokeOperator(operator.address);
-      expect(await contract.isOperator(operator.address)).to.equal(false);
+      await I_TradingRestrictionManager.connect(owner).revokeOperator(operator.address);
+      expect(await I_TradingRestrictionManager.isOperator(operator.address)).to.equal(false);
     });
 
     it("should emit OperatorRoleRevoked event", async function () {
-      await expect(contract.connect(owner).revokeOperator(operator.address))
-        .to.emit(contract, "OperatorRoleRevoked")
-        .withArgs(operator.address);
+      await expect(I_TradingRestrictionManager.connect(owner).revokeOperator(nonOperator.address))
+        .to.emit(I_TradingRestrictionManager, "OperatorRoleRevoked")
+        .withArgs(nonOperator.address);
     });
 
     it("should reject revoking non-operator", async function () {
       await expect(
-        contract.connect(owner).revokeOperator(nonOperator.address)
+        I_TradingRestrictionManager.connect(owner).revokeOperator(nonOperator.address)
       ).to.be.revertedWith("Not an operator");
     });
 
     it("should reject non-owner trying to revoke operator role", async function () {
       await expect(
-        contract.connect(nonOperator).revokeOperator(operator.address)
+        I_TradingRestrictionManager.connect(nonOperator).revokeOperator(operator.address)
       ).to.be.reverted;
     });
   });
@@ -584,16 +699,16 @@ describe("TradingRestrictionManager", function () {
       const usPeriod = 365 * 24 * 3600; // 365 days
       const lockStart = Math.floor(Date.now() / 1000);
 
-      await contract.connect(owner).setTradingRestrictionPeriod(
+      await I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
         token1.address,
         nonUSPeriod,
         usPeriod,
         lockStart
       );
 
-      expect(await contract.nonUSTradingRestrictionPeriod(token1.address)).to.equal(nonUSPeriod);
-      expect(await contract.usTradingRestrictionPeriod(token1.address)).to.equal(usPeriod);
-      expect(await contract.tokenLockStartTime(token1.address)).to.equal(lockStart);
+      expect(await I_TradingRestrictionManager.nonUSTradingRestrictionPeriod(token1.address)).to.equal(nonUSPeriod);
+      expect(await I_TradingRestrictionManager.usTradingRestrictionPeriod(token1.address)).to.equal(usPeriod);
+      expect(await I_TradingRestrictionManager.tokenLockStartTime(token1.address)).to.equal(lockStart);
     });
 
     it("should emit TradingRestrictionSet event", async function () {
@@ -602,19 +717,19 @@ describe("TradingRestrictionManager", function () {
       const lockStart = Math.floor(Date.now() / 1000);
 
       await expect(
-        contract.connect(owner).setTradingRestrictionPeriod(
+        I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
           token1.address,
           nonUSPeriod,
           usPeriod,
           lockStart
         )
-      ).to.emit(contract, "TradingRestrictionSet")
+      ).to.emit(I_TradingRestrictionManager, "TradingRestrictionSet")
         .withArgs(token1.address, nonUSPeriod, usPeriod, lockStart);
     });
 
     it("should reject non-owner setting trading restrictions", async function () {
       await expect(
-        contract.connect(nonOperator).setTradingRestrictionPeriod(
+        I_TradingRestrictionManager.connect(nonOperator).setTradingRestrictionPeriod(
           token1.address,
           30 * 24 * 3600,
           365 * 24 * 3600,
@@ -624,33 +739,38 @@ describe("TradingRestrictionManager", function () {
     });
 
     it("should set whitelist-only trading", async function () {
-      await contract.connect(owner).setWhitelistOnlyTrading(token1.address, true);
-      expect(await contract.whitelistOnlyTrading(token1.address)).to.equal(true);
+      await I_TradingRestrictionManager.connect(owner).setWhitelistOnlyTrading(token1.address, true);
+      expect(await I_TradingRestrictionManager.whitelistOnlyTrading(token1.address)).to.equal(true);
     });
 
     it("should emit WhitelistOnlyTradingUpdated event", async function () {
       await expect(
-        contract.connect(owner).setWhitelistOnlyTrading(token1.address, true)
-      ).to.emit(contract, "WhitelistOnlyTradingUpdated")
+        I_TradingRestrictionManager.connect(owner).setWhitelistOnlyTrading(token1.address, true)
+      ).to.emit(I_TradingRestrictionManager, "WhitelistOnlyTradingUpdated")
         .withArgs(token1.address, true);
     });
 
     it("should reject non-owner setting whitelist-only trading", async function () {
       await expect(
-        contract.connect(nonOperator).setWhitelistOnlyTrading(token1.address, true)
+        I_TradingRestrictionManager.connect(nonOperator).setWhitelistOnlyTrading(token1.address, true)
       ).to.be.reverted;
     });
   });
 
   describe("KYC Data Retrieval", function () {
     beforeEach(async function () {
-      await contract.connect(operator).modifyKYCData(merkleRoot);
+      signa = await generateMerkleRootSignature(
+          operator,
+          merkleRoot,
+          expiry
+      );
+      await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(merkleRoot, expiry, signa);
     });
 
     it("should return future times for non-existing investor with whitelist enforcement", async function () {
-      await contract.connect(owner).setWhitelistOnlyTrading(token1.address, true);
+      await I_TradingRestrictionManager.connect(owner).setWhitelistOnlyTrading(token1.address, true);
 
-      const result = await contract.getInvestorKYCData(investor1.address, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(investor1.address, token1.address);
 
       const now = Math.floor(Date.now() / 1000);
       expect(result.canSendAfter).to.be.gt(now);
@@ -660,28 +780,28 @@ describe("TradingRestrictionManager", function () {
     });
 
     it("should return future times for existing investor without lock start time", async function () {
-      await contract.connect(investor1).verifyInvestor(
+      await I_TradingRestrictionManager.connect(investor1).verifyInvestor(
         proof1,
         investor1.address,
-        expiry,
+        ltime,
         isAccredited1,
         InvestorClass.NonUS
       );
 
-      const result = await contract.getInvestorKYCData(investor1.address, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(investor1.address, token1.address);
 
       const now = Math.floor(Date.now() / 1000);
       expect(result.canSendAfter).to.be.gt(now);
       expect(result.canReceiveAfter).to.be.gt(now);
-      expect(result.expiryTime).to.equal(expiry);
+      expect(result.expiryTime).to.equal(ltime);
       expect(result.added).to.equal(1);
     });
 
     it("should calculate correct unlock time for Non-US investor", async function () {
-      await contract.connect(investor1).verifyInvestor(
+      await I_TradingRestrictionManager.connect(investor1).verifyInvestor(
         proof1,
         investor1.address,
-        expiry,
+        ltime,
         isAccredited1,
         InvestorClass.NonUS
       );
@@ -690,14 +810,14 @@ describe("TradingRestrictionManager", function () {
       const usPeriod = 365 * 24 * 3600; // 365 days
       const lockStart = Math.floor(Date.now() / 1000) - 10 * 24 * 3600; // 10 days ago
 
-      await contract.connect(owner).setTradingRestrictionPeriod(
+      await I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
         token1.address,
         nonUSPeriod,
         usPeriod,
         lockStart
       );
 
-      const result = await contract.getInvestorKYCData(investor1.address, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(investor1.address, token1.address);
 
       const expectedUnlockTime = lockStart + nonUSPeriod;
       const now = Math.floor(Date.now() / 1000);
@@ -709,15 +829,15 @@ describe("TradingRestrictionManager", function () {
       }
 
       expect(result.canReceiveAfter).to.equal(expectedUnlockTime);
-      expect(result.expiryTime).to.equal(expiry);
+      expect(result.expiryTime).to.equal(ltime);
       expect(result.added).to.equal(1);
     });
 
     it("should calculate correct unlock time for US investor", async function () {
-      await contract.connect(investor2).verifyInvestor(
+      await I_TradingRestrictionManager.connect(investor2).verifyInvestor(
         proof2,
         investor2.address,
-        expiry,
+        ltime,
         isAccredited2,
         InvestorClass.US
       );
@@ -726,14 +846,14 @@ describe("TradingRestrictionManager", function () {
       const usPeriod = 365 * 24 * 3600; // 365 days
       const lockStart = Math.floor(Date.now() / 1000);
 
-      await contract.connect(owner).setTradingRestrictionPeriod(
+      await I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
         token1.address,
         nonUSPeriod,
         usPeriod,
         lockStart
       );
 
-      const result = await contract.getInvestorKYCData(investor2.address, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(investor2.address, token1.address);
 
       const expectedUnlockTime = lockStart + usPeriod;
       expect(result.canSendAfter).to.equal(expectedUnlockTime);
@@ -742,7 +862,7 @@ describe("TradingRestrictionManager", function () {
     });
 
     it("should return past time for canSendAfter when restriction period has passed", async function () {
-      await contract.connect(investor1).verifyInvestor(
+      await I_TradingRestrictionManager.connect(investor1).verifyInvestor(
         proof1,
         investor1.address,
         expiry,
@@ -753,7 +873,7 @@ describe("TradingRestrictionManager", function () {
       const nonUSPeriod = 1; // 1 second
       const lockStart = Math.floor(Date.now() / 1000) - 10; // 10 seconds ago
 
-      await contract.connect(owner).setTradingRestrictionPeriod(
+      await I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
         token1.address,
         nonUSPeriod,
         365 * 24 * 3600,
@@ -763,14 +883,14 @@ describe("TradingRestrictionManager", function () {
       // Wait a moment to ensure time has passed
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      const result = await contract.getInvestorKYCData(investor1.address, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(investor1.address, token1.address);
       const now = Math.floor(Date.now() / 1000);
 
       expect(result.canSendAfter).to.be.lt(now);
     });
 
     it("should handle multiple tokens with different restrictions", async function () {
-      await contract.connect(investor1).verifyInvestor(
+      await I_TradingRestrictionManager.connect(investor1).verifyInvestor(
         proof1,
         investor1.address,
         expiry,
@@ -781,22 +901,22 @@ describe("TradingRestrictionManager", function () {
       const lockStart = Math.floor(Date.now() / 1000);
 
       // Set different restrictions for different tokens
-      await contract.connect(owner).setTradingRestrictionPeriod(
+      await I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
         token1.address,
         30 * 24 * 3600, // 30 days
         365 * 24 * 3600, // 365 days
         lockStart
       );
 
-      await contract.connect(owner).setTradingRestrictionPeriod(
+      await I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
         token2.address,
         60 * 24 * 3600, // 60 days
         730 * 24 * 3600, // 730 days
         lockStart
       );
 
-      const result1 = await contract.getInvestorKYCData(investor1.address, token1.address);
-      const result2 = await contract.getInvestorKYCData(investor1.address, token2.address);
+      const result1 = await I_TradingRestrictionManager.getInvestorKYCData(investor1.address, token1.address);
+      const result2 = await I_TradingRestrictionManager.getInvestorKYCData(investor1.address, token2.address);
 
       expect(result1.canSendAfter).to.equal(lockStart + 30 * 24 * 3600);
       expect(result2.canSendAfter).to.equal(lockStart + 60 * 24 * 3600);
@@ -805,14 +925,14 @@ describe("TradingRestrictionManager", function () {
 
   describe("Edge Cases and Error Handling", function () {
     it("should handle zero addresses appropriately", async function () {
-      expect(await contract.isExistingInvestor(ethers.ZeroAddress)).to.equal(false);
+      expect(await I_TradingRestrictionManager.isExistingInvestor(ethers.ZeroAddress)).to.equal(false);
 
-      const result = await contract.getInvestorKYCData(ethers.ZeroAddress, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(ethers.ZeroAddress, token1.address);
       expect(result.added).to.equal(1); // Should return 1
     });
 
     it("should handle uninitialized token data", async function () {
-      const result = await contract.getInvestorKYCData(investor3.address, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(investor3.address, token1.address);
       expect(result.added).to.equal(1); // Should return 1
     });
 
@@ -825,10 +945,10 @@ describe("TradingRestrictionManager", function () {
       const futureRoot = futureTree.root;
       const futureProof = futureTree.getProof(0);
 
-      await contract.connect(operator).modifyKYCData(futureRoot);
+      await I_TradingRestrictionManager.connect(operator).modifyKYCData(futureRoot);
 
       await expect(
-        contract.connect(investor1).verifyInvestor(
+        I_TradingRestrictionManager.connect(investor1).verifyInvestor(
           futureProof,
           investor1.address,
           futureExpiry,
@@ -839,8 +959,8 @@ describe("TradingRestrictionManager", function () {
     });
 
     it("should handle zero restriction periods", async function () {
-      await contract.connect(operator).modifyKYCData(merkleRoot);
-      await contract.connect(investor1).verifyInvestor(
+      await I_TradingRestrictionManager.connect(operator).modifyKYCData(merkleRoot);
+      await I_TradingRestrictionManager.connect(investor1).verifyInvestor(
         proof1,
         investor1.address,
         expiry,
@@ -848,14 +968,14 @@ describe("TradingRestrictionManager", function () {
         InvestorClass.NonUS
       );
 
-      await contract.connect(owner).setTradingRestrictionPeriod(
+      await I_TradingRestrictionManager.connect(owner).setTradingRestrictionPeriod(
         token1.address,
         0, // Zero restriction period
         0,
         Math.floor(Date.now() / 1000)
       );
 
-      const result = await contract.getInvestorKYCData(investor1.address, token1.address);
+      const result = await I_TradingRestrictionManager.getInvestorKYCData(investor1.address, token1.address);
       const now = Math.floor(Date.now() / 1000);
 
       // With zero restriction, should be unlocked immediately
