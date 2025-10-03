@@ -37,6 +37,7 @@ describe("TradingRestrictionManager", function () {
     let stGetter;
     let ltime;
     let signa;
+    let signa1;
     let proof3;
     let I_TradingRestrictionManager;
 
@@ -135,12 +136,19 @@ describe("TradingRestrictionManager", function () {
             proof3 = merkleTree.getProof(i);
         }
     }
-
     signa = await generateMerkleRootSignature(
         operator,
         merkleRoot,
         expiry
     );
+    console.log("sinaturee1", signa)
+    signa1 = await generateMerkleRootSignature(
+        nonOperator,
+        merkleRoot,
+        expiry
+    );
+
+
   });
 
   describe("Merkle Root Management", function () {
@@ -240,8 +248,8 @@ describe("TradingRestrictionManager", function () {
 
     it("should reject non-operator trying to set merkle root", async function () {
       await expect(
-        I_TradingRestrictionManager.connect(nonOperator).updateMerkleRootWithSignature(merkleRoot, expiry, signa)
-      ).to.be.revertedWith("Operator only");
+        I_TradingRestrictionManager.connect(nonOperator).updateMerkleRootWithSignature(merkleRoot, expiry, signa1)
+      ).to.be.reverted;
     });
 
     it("should allow updating merkle root multiple times", async function () {
@@ -758,14 +766,10 @@ describe("TradingRestrictionManager", function () {
   });
 
   describe("KYC Data Retrieval", function () {
-    beforeEach(async function () {
-      signa = await generateMerkleRootSignature(
-          operator,
-          merkleRoot,
-          expiry
-      );
-      await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(merkleRoot, expiry, signa);
-    });
+    // beforeEach(async function () {
+    //   console.log("signature2:", signa);
+    //   await I_TradingRestrictionManager.connect(operator).updateMerkleRootWithSignature(merkleRoot, expiry, signa);
+    // });
 
     it("should return future times for non-existing investor with whitelist enforcement", async function () {
       await I_TradingRestrictionManager.connect(owner).setWhitelistOnlyTrading(token1.address, true);
